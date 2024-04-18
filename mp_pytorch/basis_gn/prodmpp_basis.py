@@ -39,7 +39,7 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
         # [*add_dim, num_times, num_basis_g]
 
         # convert times to phases
-        times = self.phase_generator.unbound_phase(times)
+        times = self.phase_generator.unbound_phase(times)  # check whether works in all conditions
         nrbf_basis = super(ProDMPPBasisGenerator, self).basis(times)
         window = self.window_func(times)
         # shape: [*add_dim, num_tims], [*add_dim, num_times, num_basis]
@@ -49,49 +49,34 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
         basis = torch.cat([f_basis, g_basis[..., None]], dim=-1)
         return basis
 
-    # def vel_basis(self, times: torch.Tensor):
-    #
-    #     # Shape of times:
-    #     # [*add_dim, num_times]
-    #     #
-    #     # Shape of vel_basis:
-    #     # [*add_dim, num_times, num_basis_g]
-    #     # 一阶差分
-    #     dt = (times[..., -1] - times[..., -2])[..., None]
-    #     times = torch.cat([times, times[..., -1]+dt], dim=-1)
-    #     pos_basis = self.basis(times)
-    #     vel_basis = (pos_basis[..., 1:, :] - pos_basis[..., :-1, :]) / \
-    #                 (dt/self.phase_generator.tau)
-    #     return vel_basis
-
-    def vel_basis(self, times: torch.Tensor):
-
+    def vel_basis(self, times: torch.Tensor, h: torch.float32 = 1e-5):
         # Shape of times:
         # [*add_dim, num_times]
         #
         # Shape of vel_basis:
         # [*add_dim, num_times, num_basis_g]
-        # 二阶差分
-        dt = (times[..., -1] - times[..., -2])[..., None]
-        times = torch.cat([times[..., 0]-dt, times, times[..., -1]+dt], dim=-1)
-        pos_basis = self.basis(times)
-        vel_basis = (pos_basis[..., 2:, :] - pos_basis[..., :-2, :]) / \
-                    (2*dt/self.phase_generator.tau)
+
+        # h is the difference
+        # second-order difference
+        backward = self.basis(times - h)
+        forward = self.basis(times + h)
+        vel_basis = (forward - backward) / 2 * h
         return vel_basis
 
-    def acc_basis(self, times: torch.Tensor):
+    def acc_basis(self, times: torch.Tensor, h: torch.float32 = 1e-5):
 
         # Shape of times:
         # [*add_dim, num_times]
         #
         # Shape of vel_basis:
         # [*add_dim, num_times, num_basis_g]
-        # 一阶差分
-        dt = (times[..., -1] - times[..., -2])[..., None]
-        times = torch.cat([times, times[..., -1]+dt], dim=-1)
-        vel_basis = self.vel_basis(times)
-        acc_basis = (vel_basis[..., 1:, :] - vel_basis[..., :-1, :]) / \
-                    (dt/self.phase_generator.tau)
+
+        # h value needs to be considered in detail
+        # second-order difference
+        backward = self.basis(times - h)
+        forward = self.basis(times + h)
+        mid = self.basis(times)
+        acc_basis = (backward - 2*mid + forward) / h**2
         return acc_basis
 
     def general_solution_values(self, times: torch.Tensor):
