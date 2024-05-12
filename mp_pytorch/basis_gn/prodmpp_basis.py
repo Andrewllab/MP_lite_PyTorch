@@ -2,14 +2,15 @@
 import torch
 
 from mp_pytorch import util
-from mp_pytorch.phase_gn import LinearPhaseGenerator
+from mp_pytorch.phase_gn import PhaseGenerator, LinearPhaseGenerator
+from . import ProDMPBasisGenerator
 from .norm_rbf_basis import NormalizedRBFBasisGenerator
 
 
-class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
+class ProDMPPBasisGenerator(ProDMPBasisGenerator):
 
     def __init__(self,
-                 phase_generator: LinearPhaseGenerator,
+                 phase_generator: PhaseGenerator = LinearPhaseGenerator(),
                  order: int = 2,
                  num_basis: int = 10,
                  basis_bandwidth_factor: float = 2.0,
@@ -18,7 +19,7 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
                  dtype: torch.dtype = torch.float32,
                  device: torch.device = 'cpu',
                  **kwargs):
-        super(ProDMPPBasisGenerator, self).__init__(phase_generator,
+        super(ProDMPBasisGenerator, self).__init__(phase_generator,
                                                     num_basis,
                                                     basis_bandwidth_factor,
                                                     num_basis_outside,
@@ -30,7 +31,7 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
 
         self.num_basis_g = self.num_basis + 1
 
-    def basis(self, times: torch.Tensor):
+    def basis(self, times: torch.Tensor, time_scaled: bool = False):
 
         # shape of times:
         # [*add_dim, num_tims]
@@ -39,8 +40,12 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
         # [*add_dim, num_times, num_basis_g]
 
         # convert times to phases
-        times = self.phase_generator.unbound_phase(times)  # check whether works in all conditions
-        nrbf_basis = super(ProDMPPBasisGenerator, self).basis(times)
+        if time_scaled:
+            real_time = self.phase_generator.phase_to_time(times)
+            nrbf_basis = super(ProDMPBasisGenerator, self).basis(real_time)
+        else:
+            nrbf_basis = super(ProDMPBasisGenerator, self).basis(times)
+            times = self.phase_generator.left_bound_phase(times)
         window = self.window_func(times)
         # shape: [*add_dim, num_tims], [*add_dim, num_times, num_basis]
         #        -> [*add_dim, num_tims, num_basis]
@@ -58,9 +63,13 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
 
         # h is the difference
         # second-order difference
-        backward = self.basis(times - h)
-        forward = self.basis(times + h)
-        vel_basis = (forward - backward) / 2 * h
+        back = self.phase_generator.left_bound_phase(times-h, -h)
+        fore = self.phase_generator.left_bound_phase(times+h, -h)
+        backward = self.basis(back, True)
+        forward = self.basis(fore, True)
+        # vel_basis = (forward - backward) / (2 * (h / self.phase_generator.tau))
+        vel_basis = torch.einsum('...ij,...->...ij', forward-backward,
+                                 0.5/(h/self.phase_generator.tau))
         return vel_basis
 
     def acc_basis(self, times: torch.Tensor, h: torch.float32 = 1e-5):
@@ -73,10 +82,17 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
 
         # h value needs to be considered in detail
         # second-order difference
-        backward = self.basis(times - h)
-        forward = self.basis(times + h)
-        mid = self.basis(times)
-        acc_basis = (backward - 2*mid + forward) / h**2
+        back = self.phase_generator.left_bound_phase(times - h, -h)
+        fore = self.phase_generator.left_bound_phase(times + h, -h)
+        inter = self.phase_generator.left_bound_phase(times, -h)
+        backward = self.basis(back, True)
+        forward = self.basis(fore, True)
+        intermediate = self.basis(inter, True)
+        # acc_basis = ((backward - 2*intermediate + forward) /
+        #              ((h/self.phase_generator.tau) ** 2))
+        acc_basis = torch.einsum('...ij,...->...ij',
+                                 backward - 2*intermediate + forward,
+                                 (h/self.phase_generator.tau)**-2)
         return acc_basis
 
     def general_solution_values(self, times: torch.Tensor):
@@ -88,7 +104,7 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
         # [*add_dim, num_times]
 
         # convert times to phases
-        times = self.phase_generator.unbound_phase(times)
+        times = self.phase_generator.left_bound_phase(times)
         free_basis = []
         derivative = []
         for i in range(self.order):
@@ -172,39 +188,39 @@ class ProDMPPBasisGenerator(NormalizedRBFBasisGenerator):
         # Return
         return acc_basis_multi_dofs
 
-    def show_basis(self, plot=False):
-        """
-        Compute basis function values for debug usage
-        The times are in the range of [delay - tau, delay + 2 * tau]
-
-        Returns: basis function values
-
-        """
-        tau = self.phase_generator.tau
-        delay = self.phase_generator.delay
-        assert tau.ndim == 0 and delay.ndim == 0
-        times = torch.linspace(delay, delay + tau, steps=1000)
-        basis_values = self.basis(times)
-        if plot:
-            import matplotlib.pyplot as plt
-            fig, axes = plt.subplots(1, 2, sharex=True, squeeze=False)
-            for i in range(basis_values.shape[-1] - 1):
-                axes[0, 0].plot(times, basis_values[:, i], label=f"w_basis_{i}")
-            axes[0, 0].grid()
-            axes[0, 0].legend()
-            axes[0, 0].axvline(x=delay, linestyle='--', color='k', alpha=0.3)
-            axes[0, 0].axvline(x=delay + tau, linestyle='--', color='k',
-                               alpha=0.3)
-
-            axes[0, 1].plot(times, basis_values[:, -1], label=f"goal_basis")
-            axes[0, 1].grid()
-            axes[0, 1].legend()
-            axes[0, 1].axvline(x=delay, linestyle='--', color='k', alpha=0.3)
-            axes[0, 1].axvline(x=delay + tau, linestyle='--', color='k',
-                               alpha=0.3)
-
-            plt.show()
-        return times, basis_values
+    # def show_basis(self, plot=False):
+    #     """
+    #     Compute basis function values for debug usage
+    #     The times are in the range of [delay - tau, delay + 2 * tau]
+    #
+    #     Returns: basis function values
+    #
+    #     """
+    #     tau = self.phase_generator.tau
+    #     delay = self.phase_generator.delay
+    #     assert tau.ndim == 0 and delay.ndim == 0
+    #     times = torch.linspace(delay, delay + tau, steps=1000)
+    #     basis_values = self.basis(times)
+    #     if plot:
+    #         import matplotlib.pyplot as plt
+    #         fig, axes = plt.subplots(1, 2, sharex=True, squeeze=False)
+    #         for i in range(basis_values.shape[-1] - 1):
+    #             axes[0, 0].plot(times, basis_values[:, i], label=f"w_basis_{i}")
+    #         axes[0, 0].grid()
+    #         axes[0, 0].legend()
+    #         axes[0, 0].axvline(x=delay, linestyle='--', color='k', alpha=0.3)
+    #         axes[0, 0].axvline(x=delay + tau, linestyle='--', color='k',
+    #                            alpha=0.3)
+    #
+    #         axes[0, 1].plot(times, basis_values[:, -1], label=f"goal_basis")
+    #         axes[0, 1].grid()
+    #         axes[0, 1].legend()
+    #         axes[0, 1].axvline(x=delay, linestyle='--', color='k', alpha=0.3)
+    #         axes[0, 1].axvline(x=delay + tau, linestyle='--', color='k',
+    #                            alpha=0.3)
+    #
+    #         plt.show()
+    #     return times, basis_values
 
 
 def _2ord(times: torch.Tensor, alpha: float = 50):

@@ -50,3 +50,10 @@ class LinearPhaseGenerator(PhaseGenerator):
 
         phase = (times - self.delay[..., None]) / self.tau[..., None]
         return phase
+
+    def left_bound_phase(self, times, bound=0):
+
+        left_bound_phase = torch.clip((times - self.delay[..., None]) /
+                                      self.tau[..., None], min=bound)
+        return left_bound_phase
+

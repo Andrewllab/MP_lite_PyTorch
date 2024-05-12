@@ -1,6 +1,7 @@
 import torch
 
-from mp_pytorch.basis_gn import NormalizedRBFBasisGenerator
+from mp_pytorch.basis_gn import NormalizedRBFBasisGenerator, \
+    ProDMPPBasisGenerator
 from mp_pytorch.basis_gn import ProDMPBasisGenerator
 from mp_pytorch.basis_gn import ZeroPaddingNormalizedRBFBasisGenerator
 from mp_pytorch.phase_gn import ExpDecayPhaseGenerator
@@ -8,6 +9,7 @@ from mp_pytorch.phase_gn import LinearPhaseGenerator
 from .dmp import DMP
 from .prodmp import ProDMP
 from .promp import ProMP
+from .prodmpp import ProDMPP
 
 
 class MPFactory:
@@ -106,6 +108,24 @@ class MPFactory:
                 dtype=dtype, device=device)
             mp = ProDMP(basis_gn=basis_gn, num_dof=num_dof, dtype=dtype,
                         device=device, **mp_args)
+
+        elif mp_type == 'prodmp+':
+            phase_gn = LinearPhaseGenerator(tau=tau, delay=delay,
+                                            learn_tau=learn_tau,
+                                            learn_delay=learn_delay,
+                                            dtype=dtype, device=device)
+            basis_gn = ProDMPPBasisGenerator(
+                phase_generator=phase_gn,
+                order=mp_args["order"],
+                num_basis=mp_args["num_basis"],
+                basis_bandwidth_factor=mp_args["basis_bandwidth_factor"],
+                num_basis_outside=mp_args["num_basis_outside"],
+                alpha=mp_args["alpha"],
+                dtype=dtype, device=device
+            )
+            mp = ProDMPP(basis_gn=basis_gn, num_dof=num_dof,
+                         order=mp_args["order"], dtype=dtype, device=device)
+
         else:
             raise NotImplementedError
 
