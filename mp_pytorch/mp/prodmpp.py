@@ -6,6 +6,7 @@ import logging
 import numpy as np
 import torch
 import logging
+from torch.distributions import MultivariateNormal
 
 import mp_pytorch.util
 from mp_pytorch.basis_gn import ProDMPPBasisGenerator
@@ -50,11 +51,11 @@ class ProDMPP(ProDMP):
         if self.order == 2:
             super().set_times(times)
         else:
+            super(ProDMP, self).set_times(times)
             # self.y1, self.y2, self.y3, self.dy1, self.dy2, self.dy3, self.ddy1, \
             #     self.ddy2, self.ddy3 = self.basis_gn.general_solution_values(times)
             self.y1, self.y2, self.y3, self.dy1, self.dy2, self.dy3, _, \
                 _, _ = self.basis_gn.general_solution_values(times)
-            super(ProDMP, self).set_times(times)  # check whether correct
 
     def set_initial_conditions(self, init_time,
                                init_conds):
@@ -82,9 +83,9 @@ class ProDMPP(ProDMP):
             self.ddy2_init = basis_init[7].squeeze(-1)
             self.ddy3_init = basis_init[8].squeeze(-1)
 
-            self.init_pos = torch.as_tensor(init_conds[0], dtype=self.dtype)
-            self.init_vel = torch.as_tensor(init_conds[1], dtype=self.dtype)
-            self.init_acc = torch.as_tensor(init_conds[2], dtype=self.dtype)
+            self.init_pos = torch.as_tensor(init_conds[0], dtype=self.dtype, device=self.device)
+            self.init_vel = torch.as_tensor(init_conds[1], dtype=self.dtype, device=self.device)
+            self.init_acc = torch.as_tensor(init_conds[2], dtype=self.dtype, device=self.device)
 
             self.clear_computation_result()
 
@@ -94,7 +95,7 @@ class ProDMPP(ProDMP):
             self.set_params(params)
         if times is not None:
             self.set_times(times)
-        if init_time is not None and init_conds:
+        if init_time is not None and init_conds is not None:
             self.set_initial_conditions(init_time, init_conds)
         if params_L is not None:
             self.set_mp_params_variances(params_L)
@@ -740,4 +741,98 @@ class ProDMPP(ProDMP):
 
             plt.show()
         return times, basis_values
+
+    def sample_trajectories(self, times=None, params=None, params_L=None,
+                            init_time=None, init_conds = None,
+                            num_smp=1, flat_shape=False):
+        """
+        Sample trajectories from MP
+
+        Args:
+            times: time points
+            params: learnable parameters
+            params_L: learnable parameters' variance
+            init_time: initial condition time
+            init_pos: initial condition position
+            init_vel: initial condition velocity
+            num_smp: num of trajectories to be sampled
+            flat_shape: if flatten the dimensions of Dof and time
+
+        Returns:
+            sampled trajectories
+        """
+
+        # Shape of pos_smp
+        # [*add_dim, num_smp, num_times, num_dof]
+        # or [*add_dim, num_smp, num_dof * num_times]
+
+        if all([data is None for data in {times, params, params_L, init_time,
+                                          init_conds}]):
+            times = self.times
+            params = self.params
+            params_L = self.params_L
+            init_time = self.init_time
+            init_pos = self.init_pos
+            init_vel = self.init_vel
+            if self.order == 3:
+                init_acc =self.init_acc
+
+        num_add_dim = params.ndim - 1
+
+        # Add additional sample axis to time
+        # Shape [*add_dim, num_smp, num_times]
+        times_smp = mp_pytorch.util.add_expand_dim(times, [num_add_dim], [num_smp])
+
+        # Sample parameters, shape [num_smp, *add_dim, num_mp_params]
+        params_smp = MultivariateNormal(loc=params,
+                                        scale_tril=params_L,
+                                        validate_args=False).rsample([num_smp])
+
+        # Switch axes to [*add_dim, num_smp, num_mp_params]
+        params_smp = torch.einsum('i...j->...ij', params_smp)
+
+        params_super = self.basis_gn.get_params()
+        if params_super.nelement() != 0:
+            params_super_smp = mp_pytorch.util.add_expand_dim(params_super, [-2],
+                                                   [num_smp])
+            params_smp = torch.cat([params_super_smp, params_smp], dim=-1)
+
+        # Add additional sample axis to initial condition
+        if init_time is not None:
+            init_time_smp = mp_pytorch.util.add_expand_dim(init_time, [num_add_dim], [num_smp])
+            init_pos_smp = mp_pytorch.util.add_expand_dim(init_pos, [num_add_dim], [num_smp])
+            init_vel_smp = mp_pytorch.util.add_expand_dim(init_vel, [num_add_dim], [num_smp])
+            if self.order == 3:
+                init_acc_smp = mp_pytorch.util.add_expand_dim(init_acc, [num_add_dim], [num_smp])
+        else:
+            init_time_smp = None
+            init_pos_smp = None
+            init_vel_smp = None
+            if self.order == 3:
+                init_acc_smp = None
+
+        init_conds = [init_pos_smp, init_vel_smp]
+        if self.order == 3:
+            init_conds.append(init_acc_smp)
+
+        # Update inputs
+        self.reset()
+        self.update_inputs(times_smp, params_smp, None,
+                           init_time_smp, init_conds)
+
+        # Get sample trajectories
+        pos_smp = self.get_traj_pos(flat_shape=flat_shape)
+        vel_smp = self.get_traj_vel(flat_shape=flat_shape)
+
+        # Recover old inputs
+        if params_super.nelement() != 0:
+            params = torch.cat([params_super, params], dim=-1)
+        self.reset()
+        init_conds = [init_pos, init_vel]
+        if self.order == 3:
+            init_conds.append(init_acc)
+        self.update_inputs(times, params, None, init_time, init_conds)
+
+        return pos_smp, vel_smp
+
 

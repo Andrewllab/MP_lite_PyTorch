@@ -488,7 +488,7 @@ class ProbabilisticMPInterface(MPInterface):
         # [*add_dim, num_mp_params, num_mp_params]
 
         self.params_L = torch.as_tensor(
-            params_L) if params_L is not None else params_L
+            params_L, dtype=self.dtype, device=self.device) if params_L is not None else params_L
         self.clear_computation_result()
 
     def update_inputs(self, times=None, params=None, params_L=None,

@@ -151,15 +151,12 @@ class ProDMP(ProMP):
         # Shape of times
         # [*add_dim, num_times]
 
-        self.times = torch.as_tensor(times, dtype=self.dtype,
-                                     device=self.device)
+        super().set_times(times)
 
         # Get general solution values at desired time points
         # Shape [*add_dim, num_times]
         self.y1, self.y2, self.dy1, self.dy2 = \
-            self.basis_gn.general_solution_values(times)
-
-        super().set_times(times)
+            self.basis_gn.general_solution_values(self.times)
 
     def set_initial_conditions(self, init_time: Union[torch.Tensor, np.ndarray],
                                init_pos: Union[torch.Tensor, np.ndarray],
