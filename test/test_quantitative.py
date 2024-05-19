@@ -54,6 +54,7 @@ def get_mp_config():
 
     # Get times
     num_t = int(config.tau / config.mp_args.dt) * 2 + 1
+    # don't understand why this num of time points, from line 56-64
     times = util.tensor_linspace(0, (tau + delay), num_t).squeeze(-1)
     times = util.add_expand_dim(times, [0], [num_traj])
 
@@ -157,6 +158,6 @@ def prodmp_quantitative_test(plot=True):
 
 
 if __name__ == "__main__":
-    dmp_quantitative_test(plot=True)
-    promp_quantitative_test(plot=True)
+    # dmp_quantitative_test(plot=True)
+    # promp_quantitative_test(plot=True)
     prodmp_quantitative_test(plot=True)

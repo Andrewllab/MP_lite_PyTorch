@@ -76,6 +76,7 @@ def speed_test():
 
     def traj_gen_func_dmp(params):
         params += 0.01
+        dmp.reset()
         dmp.update_inputs(times=times, params=params,
                           init_time=init_time, init_pos=init_pos + 0.01,
                           init_vel=init_vel)
@@ -85,6 +86,7 @@ def speed_test():
 
     def traj_gen_func_prodmp(params):
         params += 0.01
+        prodmp.reset()
         prodmp.update_inputs(times=times, params=params, params_L=None,
                              init_time=init_time, init_pos=init_pos + 0.01,
                              init_vel=init_vel)
