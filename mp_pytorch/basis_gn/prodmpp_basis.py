@@ -45,8 +45,10 @@ class ProDMPPBasisGenerator(ProDMPBasisGenerator):
             nrbf_basis = super(ProDMPBasisGenerator, self).basis(real_time)
         else:
             nrbf_basis = super(ProDMPBasisGenerator, self).basis(times)
-            times = self.phase_generator.left_bound_phase(times)
+            times = self.phase_generator.phase(times)
         window = self.window_func(times)
+        window_ = self.window_func(1-times)
+        window = window * window_
         # shape: [*add_dim, num_tims], [*add_dim, num_times, num_basis]
         #        -> [*add_dim, num_tims, num_basis]
         f_basis = torch.einsum('...,...i->...i', window, nrbf_basis)
@@ -187,40 +189,6 @@ class ProDMPPBasisGenerator(ProDMPBasisGenerator):
 
         # Return
         return acc_basis_multi_dofs
-
-    # def show_basis(self, plot=False):
-    #     """
-    #     Compute basis function values for debug usage
-    #     The times are in the range of [delay - tau, delay + 2 * tau]
-    #
-    #     Returns: basis function values
-    #
-    #     """
-    #     tau = self.phase_generator.tau
-    #     delay = self.phase_generator.delay
-    #     assert tau.ndim == 0 and delay.ndim == 0
-    #     times = torch.linspace(delay, delay + tau, steps=1000)
-    #     basis_values = self.basis(times)
-    #     if plot:
-    #         import matplotlib.pyplot as plt
-    #         fig, axes = plt.subplots(1, 2, sharex=True, squeeze=False)
-    #         for i in range(basis_values.shape[-1] - 1):
-    #             axes[0, 0].plot(times, basis_values[:, i], label=f"w_basis_{i}")
-    #         axes[0, 0].grid()
-    #         axes[0, 0].legend()
-    #         axes[0, 0].axvline(x=delay, linestyle='--', color='k', alpha=0.3)
-    #         axes[0, 0].axvline(x=delay + tau, linestyle='--', color='k',
-    #                            alpha=0.3)
-    #
-    #         axes[0, 1].plot(times, basis_values[:, -1], label=f"goal_basis")
-    #         axes[0, 1].grid()
-    #         axes[0, 1].legend()
-    #         axes[0, 1].axvline(x=delay, linestyle='--', color='k', alpha=0.3)
-    #         axes[0, 1].axvline(x=delay + tau, linestyle='--', color='k',
-    #                            alpha=0.3)
-    #
-    #         plt.show()
-    #     return times, basis_values
 
 
 def _2ord(times: torch.Tensor, alpha: float = 50):
