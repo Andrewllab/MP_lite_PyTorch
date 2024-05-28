@@ -388,11 +388,14 @@ class ProDMPP(ProDMP):
             init_time = times[..., 0]
             init_pos = trajs[..., 0, :]
             dt = (times[..., 1] - times[..., 0])
-            init_vel_inter = torch.diff(trajs, dim=-2) / dt
-            init_vel = init_vel_inter[..., 0, :]
+            init_vel_inter = torch.diff(trajs, dim=-2)
+            init_vel = torch.einsum("...i,...->...i", init_vel_inter[..., 0, :],
+                                    dt)
             init_conds = [init_pos, init_vel]
             if self.order == 3:
-                init_acc = (torch.diff(init_vel_inter, dim=-2)/dt)[..., 0, :]
+                init_acc_inter = torch.diff(init_vel_inter, dim=-2)
+                init_acc = torch.einsum("...i,...->...i", init_acc_inter[..., 0, :],
+                                        dt)
                 init_conds.append(init_acc)
 
         # Setup stuff
