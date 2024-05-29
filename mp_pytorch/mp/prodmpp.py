@@ -375,6 +375,7 @@ class ProDMPP(ProDMP):
         assert trajs.shape[:-1] == times.shape
         assert trajs.shape[-1] == self.num_dof
 
+        times = torch.as_tensor(times, dtype=self.dtype, device=self.device)
         trajs = torch.as_tensor(trajs, dtype=self.dtype, device=self.device)
 
         # Get initial conditions
