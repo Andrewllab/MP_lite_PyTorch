@@ -209,7 +209,8 @@ class MPInterface(ABC):
 
     def set_initial_conditions(self, init_time: Union[torch.Tensor, np.ndarray],
                                 init_pos: Union[torch.Tensor, np.ndarray],
-                                init_vel: Union[torch.Tensor, np.ndarray]):
+                                init_vel: Union[torch.Tensor, np.ndarray],
+                               **kwargs):
         """
         Set initial conditions in a batched manner
 
@@ -265,7 +266,7 @@ class MPInterface(ABC):
         if times is not None:
             self.set_times(times)
         if all([data is not None for data in {init_time, init_pos, init_vel}]):
-            self.set_initial_conditions(init_time, init_pos, init_vel)
+            self.set_initial_conditions(init_time, init_pos, init_vel, **kwargs)
 
     def get_params(self) -> torch.Tensor:
         """
@@ -507,7 +508,7 @@ class ProbabilisticMPInterface(MPInterface):
         Returns: None
 
         """
-        super().update_inputs(times, params, init_time, init_pos, init_vel)
+        super().update_inputs(times, params, init_time, init_pos, init_vel, **kwargs)
         if params_L is not None:
             self.set_mp_params_variances(params_L)
 
@@ -693,7 +694,7 @@ class ProbabilisticMPInterface(MPInterface):
 
     def sample_trajectories(self, times=None, params=None, params_L=None,
                             init_time=None, init_pos=None, init_vel=None,
-                            num_smp=1, flat_shape=False):
+                            num_smp=1, flat_shape=False, **kwargs):
         """
         Sample trajectories from MP
 

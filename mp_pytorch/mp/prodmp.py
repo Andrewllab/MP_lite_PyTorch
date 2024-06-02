@@ -206,7 +206,7 @@ class ProDMP(ProMP):
 
     def get_traj_pos(self, times=None, params=None,
                      init_time=None, init_pos=None, init_vel=None,
-                     flat_shape=False):
+                     flat_shape=False, **kwargs):
         """
         Compute trajectory pos
 
@@ -228,7 +228,8 @@ class ProDMP(ProMP):
         # [*add_dim, num_times, num_dof] or [*add_dim, num_dof * num_times]
 
         # Update inputs
-        self.update_inputs(times, params, None, init_time, init_pos, init_vel)
+        self.update_inputs(times, params, None, init_time,
+                           init_pos, init_vel, **kwargs)
 
         # Reuse result if existing
         if self.pos is not None:
@@ -279,7 +280,7 @@ class ProDMP(ProMP):
         return pos
 
     def get_traj_pos_cov(self, times=None, params_L=None, init_time=None,
-                         init_pos=None, init_vel=None, reg: float = 1e-4):
+                         init_pos=None, init_vel=None, reg: float = 1e-4, **kwargs):
         """
         Compute and return position covariance
 
@@ -301,7 +302,8 @@ class ProDMP(ProMP):
         # [*add_dim, num_dof * num_times, num_dof * num_times]
 
         # Update inputs
-        self.update_inputs(times, None, params_L, init_time, init_pos, init_vel)
+        self.update_inputs(times, None, params_L, init_time, init_pos, init_vel,
+                           **kwargs)
 
         # Reuse result if existing
         if self.pos_cov is not None:
@@ -340,7 +342,8 @@ class ProDMP(ProMP):
 
     def get_traj_pos_std(self, times=None, params_L=None, init_time=None,
                          init_pos=None,
-                         init_vel=None, flat_shape=False, reg: float = 1e-4):
+                         init_vel=None, flat_shape=False, reg: float = 1e-4,
+                         **kwargs):
         """
         Compute trajectory standard deviation
 
@@ -363,7 +366,8 @@ class ProDMP(ProMP):
         # [*add_dim, num_times, num_dof] or [*add_dim, num_dof * num_times]
 
         # Update inputs
-        self.update_inputs(times, None, params_L, init_time, init_pos, init_vel)
+        self.update_inputs(times, None, params_L,
+                           init_time, init_pos, init_vel, **kwargs)
 
         # Reuse result if existing
         if self.pos_std is not None:
@@ -391,7 +395,7 @@ class ProDMP(ProMP):
 
     def get_traj_vel(self, times=None, params=None,
                      init_time=None, init_pos=None, init_vel=None,
-                     flat_shape=False):
+                     flat_shape=False, **kwargs):
         """
         Compute trajectory velocity
 
@@ -413,7 +417,8 @@ class ProDMP(ProMP):
         # [*add_dim, num_times, num_dof] or [*add_dim, num_dof * num_times]
 
         # Update inputs
-        self.update_inputs(times, params, None, init_time, init_pos, init_vel)
+        self.update_inputs(times, params, None,
+                           init_time, init_pos, init_vel, **kwargs)
 
         # Reuse result if existing
         if self.vel is not None:
@@ -465,7 +470,8 @@ class ProDMP(ProMP):
 
     def get_traj_vel_cov(self, times=None, params_L=None, init_time=None,
                          init_pos=None,
-                         init_vel=None, reg: float = 1e-4):
+                         init_vel=None, reg: float = 1e-4,
+                         **kwargs):
         """
         Get trajectory velocity covariance
 
@@ -487,7 +493,8 @@ class ProDMP(ProMP):
         # [*add_dim, num_dof * num_times, num_dof * num_times]
 
         # Update inputs
-        self.update_inputs(times, None, params_L, init_time, init_pos, init_vel)
+        self.update_inputs(times, None, params_L,
+                           init_time, init_pos, init_vel, **kwargs)
 
         # Reuse result if existing
         if self.vel_cov is not None:
@@ -530,7 +537,8 @@ class ProDMP(ProMP):
 
     def get_traj_vel_std(self, times=None, params_L=None, init_time=None,
                          init_pos=None,
-                         init_vel=None, flat_shape=False, reg: float = 1e-4):
+                         init_vel=None, flat_shape=False, reg: float = 1e-4,
+                         **kwargs):
         """
         Compute trajectory velocity standard deviation
 
@@ -554,7 +562,8 @@ class ProDMP(ProMP):
         # [*add_dim, num_times, num_dof] or [*add_dim, num_dof * num_times]
 
         # Update inputs
-        self.update_inputs(times, None, params_L, init_time, init_pos, init_vel)
+        self.update_inputs(times, None, params_L,
+                           init_time, init_pos, init_vel, **kwargs)
 
         # Reuse result if existing
         if self.vel_std is not None:
@@ -611,6 +620,7 @@ class ProDMP(ProMP):
         assert trajs.shape[:-1] == times.shape
         assert trajs.shape[-1] == self.num_dof
 
+        times = torch.as_tensor(times, dtype=self.dtype, device=self.device)
         trajs = torch.as_tensor(trajs, dtype=self.dtype, device=self.device)
 
         # Get initial conditions
