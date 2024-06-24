@@ -434,6 +434,7 @@ class ProDMPP(ProDMP):
                             init_time, init_pos, init_vel,
                             num_smp, flat_shape, **kwargs)
 
+        init_acc = kwargs.get("init_acc")
         if all([data is None for data in {times, params, params_L, init_time,
                                           init_pos, init_vel, init_acc}]):
             times = self.times
