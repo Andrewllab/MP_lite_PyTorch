@@ -311,7 +311,7 @@ class UniformBSpline(ProbabilisticMPInterface):
         self.set_add_dim(list(trajs.shape[:-2]))
         self.set_times(times)
         dummy_params = torch.zeros(*self.add_dim, self.num_dof, self.num_basis,
-                                   device=self.device)
+                                   device=self.device, dtype=self.dtype)
 
         # Get initial conditions
         if self.basis_gn.init_cond_order != 0:
