@@ -10,6 +10,8 @@ from .dmp import DMP
 from .prodmp import ProDMP
 from .promp import ProMP
 from .prodmpp import ProDMPP
+from mp_pytorch.basis_gn import UniBSplineBasis
+from .uni_bspline import UniformBSpline
 
 
 class MPFactory:
@@ -126,6 +128,16 @@ class MPFactory:
             mp = ProDMPP(basis_gn=basis_gn, num_dof=num_dof,
                          order=mp_args["order"], dtype=dtype, device=device)
 
+        elif mp_type == "uni_bspline":
+            phase_gn = LinearPhaseGenerator(tau=tau, delay=delay,
+                                            learn_tau=learn_tau,
+                                            learn_delay=learn_delay,
+                                            dtype=dtype, device=device)
+            basis_gn = UniBSplineBasis(phase_generator=phase_gn,
+                                       dtype=dtype, device=device,
+                                       **mp_args)
+            mp = UniformBSpline(basis_gn=basis_gn, num_dof=num_dof,
+                                dtype=dtype, device=device, **mp_args)
         else:
             raise NotImplementedError
 
