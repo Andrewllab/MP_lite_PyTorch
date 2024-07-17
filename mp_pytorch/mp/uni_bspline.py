@@ -40,11 +40,12 @@ class UniformBSpline(ProbabilisticMPInterface):
 
     def set_initial_conditions(self, init_time: Union[torch.Tensor, np.ndarray],
                                init_pos: Union[torch.Tensor, np.ndarray],
-                               init_vel: Union[torch.Tensor, np.ndarray]):
+                               init_vel: Union[torch.Tensor, np.ndarray],
+                               **kwargs):
 
-        if not torch.all((init_time == self.phase_gn.delay)):
-            logging.warning("the initial condition only applies at the 0+delay time point")
         super().set_initial_conditions(init_time, init_pos, init_vel)
+        if not torch.all(self.init_time == self.phase_gn.delay):
+            logging.warning("the initial condition only applies at the 0+delay time point")
         self.params_init = self.basis_gn.compute_init_params(self.init_pos, self.init_vel)
         if self.params_init is not None:
             self.params_init /= self.weights_scale
