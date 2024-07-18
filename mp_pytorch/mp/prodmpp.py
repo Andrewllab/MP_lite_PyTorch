@@ -402,7 +402,7 @@ class ProDMPP(ProDMP):
     def _show_scaled_basis(self, plot=False) \
             -> Tuple[torch.Tensor, torch.Tensor]:
         if self.order == 2:
-            super()._show_scaled_basis(self, plot=plot)
+            super()._show_scaled_basis(plot=plot)
         else:
             raise NotImplementedError
 
