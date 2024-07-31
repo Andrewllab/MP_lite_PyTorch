@@ -84,7 +84,7 @@ class UniformBSpline(ProbabilisticMPInterface):
     def get_traj_pos(self, times=None, params=None, init_time=None,
                      init_pos=None, init_vel=None, flat_shape=False, **kwargs):
 
-        self.update_inputs(times, params, init_time, init_pos, init_vel, **kwargs)
+        self.update_inputs(times, params, None, init_time, init_pos, init_vel, **kwargs)
 
         if self.pos is not None:
             pos = self.pos

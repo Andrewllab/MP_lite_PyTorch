@@ -265,7 +265,7 @@ class MPInterface(ABC):
             self.set_params(params)
         if times is not None:
             self.set_times(times)
-        if all([data is not None for data in {init_time, init_pos, init_vel}]):
+        if all([data is not None for data in [init_time, init_pos, init_vel]]):
             self.set_initial_conditions(init_time, init_pos, init_vel, **kwargs)
 
     def get_params(self) -> torch.Tensor:
