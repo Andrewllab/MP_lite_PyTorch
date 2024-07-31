@@ -46,7 +46,9 @@ class UniformBSpline(ProbabilisticMPInterface):
         super().set_initial_conditions(init_time, init_pos, init_vel)
         if not torch.all(self.init_time == self.phase_gn.delay):
             logging.warning("the initial condition only applies at the 0+delay time point")
-        self.params_init = self.basis_gn.compute_init_params(self.init_pos, self.init_vel)
+        self.params_init = self.basis_gn.compute_init_params(
+            torch.zeros_like(self.init_pos, dtype=self.dtype,device=self.device),
+            self.init_vel)
         if self.params_init is not None:
             self.params_init /= self.weights_scale
 
@@ -55,6 +57,8 @@ class UniformBSpline(ProbabilisticMPInterface):
         self.end_pos = \
             torch.as_tensor(end_pos, device=self.device, dtype=self.dtype) \
                 if end_pos is not None else None
+        if self.end_pos is not None and self.init_pos is not None:
+            self.end_pos -= self.init_pos
         self.end_vel = \
             torch.as_tensor(end_vel, device=self.device, dtype=self.dtype) \
                 if end_vel is not None else None
@@ -110,6 +114,7 @@ class UniformBSpline(ProbabilisticMPInterface):
             #               [*add_dim, num_dof, num_ctrlp]
             #            -> [*add_dim, num_times, num_dof]
             pos = torch.einsum('...ik,...jk->...ij', basis_single_dof, params)
+            pos += self.init_pos[..., None, :] if self.init_pos is not None else 0
 
             self.pos = pos
 
