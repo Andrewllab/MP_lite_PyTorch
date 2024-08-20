@@ -1,4 +1,3 @@
-
 import torch
 from addict import Dict
 
@@ -18,7 +17,7 @@ def get_mp_config():
     cfg.mp_args.num_basis = 10
     cfg.mp_args.degree_p = 4
     cfg.mp_args.init_condition_order = 2
-    cfg.mp_args.end_condition_order = 2
+    cfg.mp_args.end_condition_order = -1
     cfg.mp_args.weights_scale = 0.9
 
     # assume we have 3 trajectories in a batch
@@ -49,8 +48,8 @@ def get_mp_config():
     init_time = scale_delay[:, 1]
     init_pos = 5 * torch.ones([num_traj, cfg.num_dof])
     init_vel = torch.ones_like(init_pos) * 10
-    end_pos = -5 * torch.ones([num_traj, cfg.num_dof])
-    end_vel = torch.ones_like(end_pos) * -10
+    end_pos = 0 * torch.ones([num_traj, cfg.num_dof])
+    end_vel = torch.ones_like(end_pos) * 10
 
     return cfg, params, params_L, times, init_time, init_pos, init_vel, end_pos, end_vel
 

@@ -14,8 +14,10 @@ def get_pos_vel_multidof():
     #
     # init_condition_order = 2 means imposing initial pos+vel.
     # end_condition_order for imposing end condition
+    # b_basis = UniBSplineBasis(ph_gn, degree_p=4,
+    #                           init_condition_order=2, )
     b_basis = UniBSplineBasis(ph_gn, degree_p=4,
-                              init_condition_order=2, )
+                              init_condition_order=2, end_condition_order=-1)
     mp = UniformBSpline(b_basis, num_dof=2)
 
     num_traj = 3
@@ -34,9 +36,12 @@ def get_pos_vel_multidof():
     init_time = times[:, 0]
     init_pos = 5 * torch.ones([num_traj, 2])
     init_vel = torch.zeros_like(init_pos)
+    end_pos = torch.zeros_like(init_pos)
+    end_vel = torch.zeros_like(init_pos)
 
     # if imposing end conditon, give kwarg end_pos=blabla, end_vel=blabla
-    mp.update_inputs(times, params, params_L, init_time, init_pos, init_vel)
+    # mp.update_inputs(times, params, params_L, init_time, init_pos, init_vel)
+    mp.update_inputs(times, params, params_L, init_time, init_pos, init_vel, end_pos=end_pos, end_vel=end_vel)
     pos = mp.get_traj_pos()
     vel = mp.get_traj_vel()
     util.debug_plot(x=None, y=[pos[0, :, 0]], title="pos")
@@ -58,8 +63,10 @@ def single_dof_with_std_plot():
     #
     # init_condition_order = 2 means imposing initial pos+vel.
     # end_condition_order for imposing end condition
+    # b_basis = UniBSplineBasis(ph_gn, degree_p=4,
+    #                           init_condition_order=2, end_condition_order=2)
     b_basis = UniBSplineBasis(ph_gn, degree_p=4,
-                              init_condition_order=2, end_condition_order=2)
+                              init_condition_order=2, end_condition_order=-1)
     mp = UniformBSpline(b_basis, num_dof=1)
 
     num_traj = 3  # add_dim, the batch
