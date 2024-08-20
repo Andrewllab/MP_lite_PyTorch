@@ -58,7 +58,7 @@ class UniformBSpline(ProbabilisticMPInterface):
             torch.as_tensor(end_pos, device=self.device, dtype=self.dtype) \
                 if end_pos is not None else None
         if self.end_pos is not None and self.init_pos is not None:
-            self.end_pos -= self.init_pos
+            self.end_pos = self.end_pos - self.init_pos
         self.end_vel = \
             torch.as_tensor(end_vel, device=self.device, dtype=self.dtype) \
                 if end_vel is not None else None
@@ -103,7 +103,11 @@ class UniformBSpline(ProbabilisticMPInterface):
             if self.params_init is not None:
                 params = torch.cat((self.params_init, params), dim=-1)
             if self.params_end is not None:
-                params = torch.cat((params, self.params_end), dim=-1)
+                if self.basis_gn.end_cond_order == -1:
+                    params = torch.cat([params, params[..., -1:]], dim=-1)
+                    params[..., -2] -= self.params_end.squeeze(dim=-1)
+                else:
+                    params = torch.cat((params, self.params_end), dim=-1)
 
             # Get basis
             # Shape: [*add_dim, num_times, num_ctrlp]
@@ -259,7 +263,11 @@ class UniformBSpline(ProbabilisticMPInterface):
             if self.params_init is not None:
                 params = torch.cat((self.params_init, params), dim=-1)
             if self.params_end is not None:
-                params = torch.cat((params, self.params_end), dim=-1)
+                if self.basis_gn.end_cond_order == -1:
+                    params = torch.cat([params, params[..., -1:]], dim=-1)
+                    params[..., -2] -= self.params_end.squeeze(dim=-1)
+                else:
+                    params = torch.cat((params, self.params_end), dim=-1)
 
             # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
             vel_ctrlp = self.basis_gn.velocity_control_points(params)
@@ -297,6 +305,7 @@ class UniformBSpline(ProbabilisticMPInterface):
 
         # only works for learn_tau=False, learn_delay=False. And delay=0 (or you
         # need to give the initial condition by yourself)
+        # not work for end_cond_order=-1
 
         # Shape of times
         # [*add_dim, num_times]
@@ -459,7 +468,7 @@ class UniformBSpline(ProbabilisticMPInterface):
             init_time_smp = None
             init_pos_smp = None
             init_vel_smp = None
-        if self.basis_gn.end_cond_order > 0:
+        if self.basis_gn.end_cond_order != 0:
             end_pos_smp = util.add_expand_dim(end_pos, [num_add_dim],
                                               [num_smp])
             end_vel_smp = util.add_expand_dim(end_vel, [num_add_dim],

@@ -37,7 +37,7 @@ class UniBSplineBasis(BasisGenerator):
 
         self.init_cond_order = kwargs.get("init_condition_order", 0)
         self.end_cond_order = kwargs.get("end_condition_order", 0)
-        self.num_ctrlp = num_basis + self.init_cond_order + self.end_cond_order
+        self.num_ctrlp = num_basis + self.init_cond_order + abs(self.end_cond_order)
         # number of knots needed, with respect to B-sp degree and number of
         # control points ( num_basis + init_cond_order+end_cond_order)
         num_knots = self.degree_p + 1 + self.num_ctrlp
@@ -227,6 +227,13 @@ class UniBSplineBasis(BasisGenerator):
         if self.end_cond_order == 0:
             return None
 
+        if self.end_cond_order == -1:
+            para_end = torch.einsum("...i,...->...i", end_vel,
+                                    self.phase_generator.tau) * \
+                       (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
+                        self.knots_vec[self.num_ctrlp - 1]) * self.degree_p
+            return para_end[..., None]
+
         para_end_p = end_pos
         para_end = para_end_p[..., None]
 
@@ -267,7 +274,12 @@ class UniBSplineBasis(BasisGenerator):
         basis_single_dof = self.basis(times)
         # Get the not boundary condition relevant basis,
         # shape: [*add_dim, num_times, num_basis]
-        basis_single_dof_ = basis_single_dof[..., self.init_cond_order:
+        if self.end_cond_order == -1:
+            basis_end_pos = (basis_single_dof[..., -1] + basis_single_dof[..., -2])[..., None]
+            basis_single_dof_ = torch.cat([basis_single_dof[..., self.init_cond_order: self.num_ctrlp-2],
+                                          basis_end_pos], dim=-1)
+        else:
+            basis_single_dof_ = basis_single_dof[..., self.init_cond_order:
                                             self.num_ctrlp-self.end_cond_order]
 
         # Multiple Dofs, shape:
