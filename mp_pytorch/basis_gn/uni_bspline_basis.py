@@ -135,8 +135,11 @@ class UniBSplineBasis(BasisGenerator):
         # shape: [*add_dim, num_dof, num_ctrlp-2]
         diff = vel_ctrl_pts[..., 1:] - vel_ctrl_pts[..., :-1]
         # shape: [num_ctrlp-2]
-        delta = self.knots_vec[2+self.degree_p: self.num_ctrlp+self.degree_p-1]\
-            - self.knots_vec[2: self.num_ctrlp-1]
+        # delta = self.knots_vec[2+self.degree_p: self.num_ctrlp+self.degree_p-1]\
+        #     - self.knots_vec[2: self.num_ctrlp-1]
+        delta = self.knots_vec[
+                2 + self.degree_p: self.num_ctrlp + self.degree_p] \
+                - self.knots_vec[2: self.num_ctrlp]
         diff = diff * (1/delta)
         return diff * (self.degree_p-1)
 
