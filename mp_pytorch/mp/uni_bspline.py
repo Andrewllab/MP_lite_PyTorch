@@ -30,6 +30,8 @@ class UniformBSpline(ProbabilisticMPInterface):
         self.params_init = None
         self.params_end = None
 
+        self.acc = None
+
     def update_inputs(self, times=None, params=None, params_L=None,
                       init_time=None, init_pos=None, init_vel=None, **kwargs):
         super().update_inputs(times, params, params_L, init_time, init_pos, init_vel)
@@ -245,9 +247,10 @@ class UniformBSpline(ProbabilisticMPInterface):
     #     return vel
 
     def get_traj_vel(self, times=None, params=None, init_time=None,
-                     init_pos=None, init_vel=None, flat_shape=False, **kwargs):
+                     init_pos=None, init_vel=None, flat_shape=False,
+                     ctrl_only=False, **kwargs):
 
-        self.update_inputs(times, params, init_time, init_pos, init_vel,
+        self.update_inputs(times, params, None, init_time, init_pos, init_vel,
                            **kwargs)
 
         if self.vel is not None:
@@ -272,6 +275,9 @@ class UniformBSpline(ProbabilisticMPInterface):
             # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
             vel_ctrlp = self.basis_gn.velocity_control_points(params)
 
+            if ctrl_only:
+                return vel_ctrlp
+
             # vel_basis shape: [*add_dim, num_times, num_ctrlp-1]
             vel_basis = self.basis_gn.vel_basis(self.times) * self.weights_scale
 
@@ -290,6 +296,58 @@ class UniformBSpline(ProbabilisticMPInterface):
             vel = vel.reshape(*self.add_dim, -1)
 
         return vel
+
+    def get_traj_acc(self, times=None, params=None, init_time=None,
+                     init_pos=None, init_vel=None, flat_shape=False,
+                     ctrl_only=False, **kwargs):
+
+        self.update_inputs(times, params, None, init_time, init_pos, init_vel,
+                           **kwargs)
+
+        if self.acc is not None:
+            acc = self.acc
+        else:
+            assert self.params is not None
+
+            # Reshape params
+            # [*add_dim, num_dof * num_basis] -> [*add_dim, num_dof, num_basis]
+            params = self.params.reshape(*self.add_dim, self.num_dof, -1)
+            # extend params with possible init and end conditions
+            # shape: [*add_dim, num_dof, num_ctrlp]
+            if self.params_init is not None:
+                params = torch.cat((self.params_init, params), dim=-1)
+            if self.params_end is not None:
+                if self.basis_gn.end_cond_order == -1:
+                    params = torch.cat([params, params[..., -1:]], dim=-1)
+                    params[..., -2] -= self.params_end.squeeze(dim=-1)
+                else:
+                    params = torch.cat((params, self.params_end), dim=-1)
+
+            # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
+            acc_ctrlp = self.basis_gn.acceleration_control_points(params)
+
+            if ctrl_only:
+                return acc_ctrlp
+
+            # vel_basis shape: [*add_dim, num_times, num_ctrlp-1]
+            acc_basis = self.basis_gn.acc_basis(self.times) * self.weights_scale
+
+            # Einsum shape: [*add_dim, num_times, num_ctrlp-1],
+            #               [*add_dim, num_dof, num_ctrlp-1]
+            #            -> [*add_dim, num_times, num_dof]
+            acc = torch.einsum('...ik,...jk->...ij', acc_basis, acc_ctrlp)
+
+            self.acc = acc
+
+        if flat_shape:
+            # Switch axes to [*add_dim, num_dof, num_times]
+            acc = torch.einsum('...ji->...ij', acc)
+
+            # Reshape to [*add_dim, num_dof * num_times]
+            acc = acc.reshape(*self.add_dim, -1)
+
+        return acc
+
 
     def get_traj_vel_cov(self, times=None, params_L=None, init_time=None,
                          init_pos=None, init_vel=None, reg: float = 1e-4):
