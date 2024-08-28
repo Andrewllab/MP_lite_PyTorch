@@ -234,7 +234,7 @@ class UniBSplineBasis(BasisGenerator):
             para_end = torch.einsum("...i,...->...i", end_vel,
                                     self.phase_generator.tau) * \
                        (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
-                        self.knots_vec[self.num_ctrlp - 1]) * self.degree_p
+                        self.knots_vec[self.num_ctrlp - 1]) / self.degree_p
             return para_end[..., None]
 
         para_end_p = end_pos
@@ -245,7 +245,7 @@ class UniBSplineBasis(BasisGenerator):
                          torch.einsum("...i,...->...i", end_vel,
                                       self.phase_generator.tau) * \
                          (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
-                          self.knots_vec[self.num_ctrlp - 1]) * self.degree_p
+                          self.knots_vec[self.num_ctrlp - 1]) / self.degree_p
             # para_end_v = para_end_p - (end_vel * self.phase_generator.tau) * \
             #               (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
             #                self.knots_vec[self.num_ctrlp-1]) * self.degree_p
