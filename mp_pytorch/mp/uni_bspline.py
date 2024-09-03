@@ -505,7 +505,7 @@ class UniformBSpline(ProbabilisticMPInterface):
                 dt = (times[..., 1] - times[..., 0])
                 init_vel = torch.einsum("...i,...->...i",
                                         torch.diff(trajs, dim=-2)[..., 0, :],
-                                        dt)
+                                        1/dt)
             if self.basis_gn.goal_basis:
                 end_pos = trajs[..., -1, :]
                 if kwargs.get("end_pos") is not None:
@@ -525,7 +525,7 @@ class UniformBSpline(ProbabilisticMPInterface):
                 end_pos = trajs[..., -1, :]
                 dt = (times[..., 1] - times[..., 0])
                 end_vel = torch.einsum("...i,...->...i",
-                                        torch.diff(trajs, dim=-2)[..., -1, :], dt)
+                                        torch.diff(trajs, dim=-2)[..., -1, :], 1/dt)
             self.set_end_condtions(end_pos, end_vel)
             if self.params_end is not None:
                 dummy_params = torch.cat([dummy_params, self.params_end],
