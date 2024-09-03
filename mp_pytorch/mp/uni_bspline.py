@@ -493,7 +493,7 @@ class UniformBSpline(ProbabilisticMPInterface):
             init_time = self.init_time
             init_pos = self.init_pos
             init_vel = self.init_vel
-            end_pos = self.end_pos
+            end_pos = self.end_pos + init_pos
             end_vel = self.end_vel
 
         num_add_dim = params.ndim - 1
