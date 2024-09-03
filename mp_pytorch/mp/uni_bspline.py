@@ -18,7 +18,8 @@ class UniformBSpline(ProbabilisticMPInterface):
                  basis_gn: UniBSplineBasis,
                  num_dof: int,
                  weights_scale: float = 1.,
-                 dtype: torch.dtype = torch.float32,
+                 goal_scale: float = 1.,
+                 dtype: torch.dtype = torch.float64,
                  device: torch.device = 'cpu',
                  **kwargs,
                  ):
@@ -32,9 +33,23 @@ class UniformBSpline(ProbabilisticMPInterface):
 
         self.acc = None
 
+        self.goal_scale = goal_scale
+        self.weights_goal_scale = self.get_weights_goal_scale()
+
+    def get_weights_goal_scale(self) -> torch.Tensor:
+
+        if self.basis_gn.goal_basis:
+            w_g_scale = torch.zeros(self.basis_gn.num_ctrlp+1,
+                                    dtype=self.dtype, device=self.device)
+            w_g_scale[:-1] = self.weights_scale
+            w_g_scale[-1] = self.goal_scale
+            return w_g_scale
+        else:
+            return self.weights_scale*torch.ones(self.basis_gn.num_ctrlp, dtype=self.dtype, device=self.device)
+
     def update_inputs(self, times=None, params=None, params_L=None,
                       init_time=None, init_pos=None, init_vel=None, **kwargs):
-        super().update_inputs(times, params, params_L, init_time, init_pos, init_vel)
+        super().update_inputs(times, params, params_L, init_time, init_pos, init_vel, **kwargs)
         end_pos = kwargs.get('end_pos', None)
         end_vel = kwargs.get('end_vel', None)
         if all([cond is not None for cond in [end_pos, end_vel]]):
@@ -50,7 +65,7 @@ class UniformBSpline(ProbabilisticMPInterface):
             logging.warning("the initial condition only applies at the 0+delay time point")
         self.params_init = self.basis_gn.compute_init_params(
             torch.zeros_like(self.init_pos, dtype=self.dtype,device=self.device),
-            self.init_vel)
+            self.init_vel, **kwargs)
         if self.params_init is not None:
             self.params_init /= self.weights_scale
 
@@ -102,19 +117,40 @@ class UniformBSpline(ProbabilisticMPInterface):
             params = self.params.reshape(*self.add_dim, self.num_dof, -1)
             # extend params with possible init and end conditions
             # shape: [*add_dim, num_dof, num_ctrlp]
-            if self.params_init is not None:
-                params = torch.cat((self.params_init, params), dim=-1)
-            if self.params_end is not None:
+            if not self.basis_gn.goal_basis:
+                if self.params_init is not None:
+                    params = torch.cat((self.params_init, params), dim=-1)
+                if self.params_end is not None:
+                    if self.basis_gn.end_cond_order == -1:
+                        params = torch.cat([params, params[..., -1:]], dim=-1)
+                        params[..., -2] -= self.params_end.squeeze(dim=-1)
+                    else:
+                        params = torch.cat((params, self.params_end), dim=-1)
+            else:
                 if self.basis_gn.end_cond_order == -1:
-                    params = torch.cat([params, params[..., -1:]], dim=-1)
-                    params[..., -2] -= self.params_end.squeeze(dim=-1)
+                    temp = params[..., -1] * self.basis_gn.dup* self.goal_scale/self.weights_scale
+                    goal_term = params[..., -1:]
+                    if self.params_init is not None:
+                        param_i = self.params_init
+                        param_i[..., 1] -= temp
+                        params = torch.cat([param_i, params[..., :-1]], dim=-1)
+                    if self.params_end is not None:
+                        param_e = self.params_end
+                        param_e[..., -2] += temp
+                        params = torch.cat([params, param_e], dim=-1)
+                    params = torch.cat([params, goal_term], dim=-1)
                 else:
-                    params = torch.cat((params, self.params_end), dim=-1)
+                    if self.params_init is not None:
+                        param_i = self.params_init
+                        params = torch.cat([param_i, params], dim=-1)
+                    if self.params_end is not None:
+                        param_e = self.params_end
+                        params = torch.cat([params, param_e], dim=-1)
+                    params = torch.cat([params, self.end_pos[..., None]], dim=-1)
 
             # Get basis
             # Shape: [*add_dim, num_times, num_ctrlp]
-            basis_single_dof = \
-                self.basis_gn.basis(self.times) * self.weights_scale
+            basis_single_dof = self.basis_gn.basis(self.times) * self.weights_goal_scale
 
             # Einsum shape: [*add_dim, num_times, num_ctrlp],
             #               [*add_dim, num_dof, num_ctrlp]
@@ -150,10 +186,17 @@ class UniformBSpline(ProbabilisticMPInterface):
         if self.params_L is None:
             return None
 
+        if self.basis_gn.goal_basis and self.basis_gn.end_cond_order==-1:
+            weights_goal_scale = torch.ones(self.num_basis, dtype=self.dtype, device=self.device)
+            weights_goal_scale[:-1] *= self.weights_scale
+            weights_goal_scale[-1] *= self.goal_scale
+            weights_goal_scale = weights_goal_scale.repeat(self.num_dof)
+        else:
+            weights_goal_scale = self.weights_scale
         # Get basis of all Dofs
         # Shape: [*add_dim, num_dof * num_times, num_dof * num_basis]
         basis_multi_dofs = self.basis_gn.basis_multi_dofs(
-            self.times, self.num_dof) * self.weights_scale
+            self.times, self.num_dof) * weights_goal_scale
 
         # Einsum shape: [*add_dim, num_dof * num_times, num_dof * num_basis]
         #               [*add_dim, num_dof * num_basis, num_dof * num_basis]
@@ -263,28 +306,58 @@ class UniformBSpline(ProbabilisticMPInterface):
             params = self.params.reshape(*self.add_dim, self.num_dof, -1)
             # extend params with possible init and end conditions
             # shape: [*add_dim, num_dof, num_ctrlp]
-            if self.params_init is not None:
-                params = torch.cat((self.params_init, params), dim=-1)
-            if self.params_end is not None:
+            if not self.basis_gn.goal_basis:
+                if self.params_init is not None:
+                    params = torch.cat((self.params_init, params), dim=-1)
+                if self.params_end is not None:
+                    if self.basis_gn.end_cond_order == -1:
+                        params = torch.cat([params, params[..., -1:]], dim=-1)
+                        params[..., -2] -= self.params_end.squeeze(dim=-1)
+                    else:
+                        params = torch.cat((params, self.params_end), dim=-1)
+
+                vel_ctrlp = self.basis_gn.velocity_control_points(params)
+                vel_params = vel_ctrlp
+
+            else:
                 if self.basis_gn.end_cond_order == -1:
-                    params = torch.cat([params, params[..., -1:]], dim=-1)
-                    params[..., -2] -= self.params_end.squeeze(dim=-1)
+                    temp = params[..., -1] * self.basis_gn.dup * self.goal_scale/self.weights_scale
+                    goal_term = params[..., -1:]
+                    if self.params_init is not None:
+                        param_i = self.params_init
+                        param_i[..., 1] -= temp
+                        params = torch.cat([param_i, params[..., :-1]], dim=-1)
+                    if self.params_end is not None:
+                        param_e = self.params_end
+                        param_e[..., -2] += temp
+                        params = torch.cat([params, param_e], dim=-1)
+                    params = torch.cat([params, goal_term], dim=-1)
                 else:
-                    params = torch.cat((params, self.params_end), dim=-1)
+                    if self.params_init is not None:
+                        param_i = self.params_init
+                        params = torch.cat([param_i, params], dim=-1)
+                    if self.params_end is not None:
+                        param_e = self.params_end
+                        params = torch.cat([params, param_e], dim=-1)
+                    params = torch.cat([params, self.end_pos[..., None]],
+                                       dim=-1)
+
+                vel_ctrlp = self.basis_gn.velocity_control_points(params[..., :-1])
+                vel_params = torch.cat([vel_ctrlp, params[..., -1:]], dim=-1)
+
 
             # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
-            vel_ctrlp = self.basis_gn.velocity_control_points(params)
 
             if ctrl_only:
                 return vel_ctrlp
 
             # vel_basis shape: [*add_dim, num_times, num_ctrlp-1]
-            vel_basis = self.basis_gn.vel_basis(self.times) * self.weights_scale
+            vel_basis = self.basis_gn.vel_basis(self.times) * self.weights_goal_scale[1:]
 
             # Einsum shape: [*add_dim, num_times, num_ctrlp-1],
             #               [*add_dim, num_dof, num_ctrlp-1]
             #            -> [*add_dim, num_times, num_dof]
-            vel = torch.einsum('...ik,...jk->...ij', vel_basis, vel_ctrlp)
+            vel = torch.einsum('...ik,...jk->...ij', vel_basis, vel_params)
 
             self.vel = vel
 
@@ -314,23 +387,54 @@ class UniformBSpline(ProbabilisticMPInterface):
             params = self.params.reshape(*self.add_dim, self.num_dof, -1)
             # extend params with possible init and end conditions
             # shape: [*add_dim, num_dof, num_ctrlp]
-            if self.params_init is not None:
-                params = torch.cat((self.params_init, params), dim=-1)
-            if self.params_end is not None:
+            if not self.basis_gn.goal_basis:
+                if self.params_init is not None:
+                    params = torch.cat((self.params_init, params), dim=-1)
+                if self.params_end is not None:
+                    if self.basis_gn.end_cond_order == -1:
+                        params = torch.cat([params, params[..., -1:]], dim=-1)
+                        params[..., -2] -= self.params_end.squeeze(dim=-1)
+                    else:
+                        params = torch.cat((params, self.params_end), dim=-1)
+
+                acc_ctrlp = self.basis_gn.acceleration_control_points(params)
+                weights_goal_scale = self.weights_goal_scale[2:]
+
+            else:
                 if self.basis_gn.end_cond_order == -1:
-                    params = torch.cat([params, params[..., -1:]], dim=-1)
-                    params[..., -2] -= self.params_end.squeeze(dim=-1)
+                    temp = params[..., -1] * self.basis_gn.dup * self.goal_scale/self.weights_scale
+                    goal_term = params[..., -1:]
+                    if self.params_init is not None:
+                        param_i = self.params_init
+                        param_i[..., 1] -= temp
+                        params = torch.cat([param_i, params[..., :-1]], dim=-1)
+                    if self.params_end is not None:
+                        param_e = self.params_end
+                        param_e[..., -2] += temp
+                        params = torch.cat([params, param_e], dim=-1)
+                    params = torch.cat([params, goal_term], dim=-1)
                 else:
-                    params = torch.cat((params, self.params_end), dim=-1)
+                    if self.params_init is not None:
+                        param_i = self.params_init
+                        params = torch.cat([param_i, params], dim=-1)
+                    if self.params_end is not None:
+                        param_e = self.params_end
+                        params = torch.cat([params, param_e], dim=-1)
+                    params = torch.cat([params, self.end_pos[..., None]],
+                                       dim=-1)
+
+                acc_ctrlp = self.basis_gn.acceleration_control_points(
+                    params[..., :-1])
+                weights_goal_scale = self.weights_goal_scale[2:-1]
 
             # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
-            acc_ctrlp = self.basis_gn.acceleration_control_points(params)
 
             if ctrl_only:
                 return acc_ctrlp
 
             # vel_basis shape: [*add_dim, num_times, num_ctrlp-1]
-            acc_basis = self.basis_gn.acc_basis(self.times) * self.weights_scale
+
+            acc_basis = self.basis_gn.acc_basis(self.times) * weights_goal_scale
 
             # Einsum shape: [*add_dim, num_times, num_ctrlp-1],
             #               [*add_dim, num_dof, num_ctrlp-1]
@@ -364,6 +468,7 @@ class UniformBSpline(ProbabilisticMPInterface):
         # only works for learn_tau=False, learn_delay=False. And delay=0 (or you
         # need to give the initial condition by yourself)
         # not work for end_cond_order=-1
+        # not work for goal_basis yet
 
         # Shape of times
         # [*add_dim, num_times]
@@ -401,7 +506,11 @@ class UniformBSpline(ProbabilisticMPInterface):
                 init_vel = torch.einsum("...i,...->...i",
                                         torch.diff(trajs, dim=-2)[..., 0, :],
                                         dt)
-            self.set_initial_conditions(init_time, init_pos, init_vel)
+            if self.basis_gn.goal_basis:
+                end_pos = trajs[..., -1, :]
+                if kwargs.get("end_pos") is not None:
+                    end_pos = kwargs["end_pos"]
+            self.set_initial_conditions(init_time, init_pos, init_vel, end_pos=end_pos)
             if self.params_init is not None:
                 dummy_params = torch.cat([self.params_init, dummy_params],
                                          dim=-1)
@@ -421,8 +530,10 @@ class UniformBSpline(ProbabilisticMPInterface):
             if self.params_end is not None:
                 dummy_params = torch.cat([dummy_params, self.params_end],
                                          dim=-1)
+            if self.basis_gn.goal_basis:
+                dummy_params = torch.cat([dummy_params, self.end_pos[..., None]], dim=-1)
 
-        basis_single_dof = self.basis_gn.basis(times) * self.weights_scale
+        basis_single_dof = self.basis_gn.basis(times) * self.weights_goal_scale
         # shape: [*add_dim, num_time, num_ctrlp]
         #        [*add_dim, num_dof, num_ctrlp]
         #        [*add_dim, num_times, num_dof]
@@ -431,7 +542,14 @@ class UniformBSpline(ProbabilisticMPInterface):
         pos_det = torch.einsum('...ij->...ji', pos_det)
         pos_det = pos_det.reshape(*self.add_dim, -1)
 
-        basis_multi_dofs = self.basis_gn.basis_multi_dofs(self.times, self.num_dof) * self.weights_scale
+        if self.basis_gn.goal_basis and self.basis_gn.end_cond_order==-1:
+            weights_goal_scale = torch.ones(self.num_basis, dtype=self.dtype, device=self.device)
+            weights_goal_scale[:-1] *= self.weights_scale
+            weights_goal_scale[-1] *= self.goal_scale
+            weights_goal_scale = weights_goal_scale.repeat(self.num_dof)
+        else:
+            weights_goal_scale = self.weights_scale
+        basis_multi_dofs = self.basis_gn.basis_multi_dofs(self.times, self.num_dof) * weights_goal_scale
         # Solve this: Aw = B -> w = A^{-1} B
         # Einsum_shape: [*add_dim, num_dof * num_times, num_dof * num_basis]
         #               [*add_dim, num_dof * num_times, num_dof * num_basis]
@@ -493,7 +611,7 @@ class UniformBSpline(ProbabilisticMPInterface):
             init_time = self.init_time
             init_pos = self.init_pos
             init_vel = self.init_vel
-            end_pos = self.end_pos
+            end_pos = self.end_pos+self.init_pos
             end_vel = self.end_vel
 
         num_add_dim = params.ndim - 1

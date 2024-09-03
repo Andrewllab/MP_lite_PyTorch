@@ -11,7 +11,7 @@ class UniBSplineBasis(BasisGenerator):
                  phase_generator: LinearPhaseGenerator,
                  num_basis: int = 10,
                  degree_p: int = 3,
-                 dtype: torch.dtype = torch.float32,
+                 dtype: torch.dtype = torch.float64,
                  device: torch.device = 'cpu',
                  **kwargs):
         """
@@ -37,7 +37,10 @@ class UniBSplineBasis(BasisGenerator):
 
         self.init_cond_order = kwargs.get("init_condition_order", 0)
         self.end_cond_order = kwargs.get("end_condition_order", 0)
+        self.goal_basis = kwargs.get("goal_basis", False)
         self.num_ctrlp = num_basis + self.init_cond_order + abs(self.end_cond_order)
+        # if self.goal_basis and self.end_cond_order==-1:
+        #     self.num_ctrlp += 1
         # number of knots needed, with respect to B-sp degree and number of
         # control points ( num_basis + init_cond_order+end_cond_order)
         num_knots = self.degree_p + 1 + self.num_ctrlp
@@ -67,7 +70,9 @@ class UniBSplineBasis(BasisGenerator):
         basis = [self._basis_function(i, self.degree_p, self.knots_vec, phase)
                  for i in range(self.num_ctrlp)]
         basis = torch.stack(basis, dim=-1)
-
+        if self.goal_basis:
+            gb = phase[..., None]
+            basis = torch.cat([basis, gb], dim=-1)
         return basis
 
     def _basis_function(self, i, k, knots, u, **kwargs):
@@ -158,6 +163,9 @@ class UniBSplineBasis(BasisGenerator):
             [self._basis_function(i, self.degree_p-1, vel_nots_vec, phase, num_ctrlp=self.num_ctrlp-1)
              for i in range(self.num_ctrlp-1)]
         basis = torch.stack(basis, dim=-1)
+        if self.goal_basis:
+            gb = torch.ones_like(phase, dtype=self.dtype, device=self.device)[..., None]
+            basis = torch.cat([basis, gb], dim=-1)
         return basis
 
     def acc_basis(self, times: torch.Tensor) -> torch.Tensor:
@@ -206,6 +214,12 @@ class UniBSplineBasis(BasisGenerator):
                 torch.einsum("...i,...->...i", init_vel, self.phase_generator.tau) * \
                 (self.knots_vec[1 + self.degree_p] - self.knots_vec[1]) \
                 / self.degree_p + para_init_p
+
+            if self.goal_basis and (self.end_cond_order == 1 or self.end_cond_order ==2):
+                end_pos = kwargs.get("end_pos")
+                temp = end_pos * (self.knots_vec[1 + self.degree_p] - self.knots_vec[1]) \
+                    / self.degree_p
+                para_init_v = para_init_v - temp
             para_init = torch.cat([para_init, para_init_v[..., None]], dim=-1)
 
         return para_init
@@ -230,28 +244,57 @@ class UniBSplineBasis(BasisGenerator):
         if self.end_cond_order == 0:
             return None
 
-        if self.end_cond_order == -1:
-            para_end = torch.einsum("...i,...->...i", end_vel,
-                                    self.phase_generator.tau) * \
-                       (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
-                        self.knots_vec[self.num_ctrlp - 1]) * self.degree_p
-            return para_end[..., None]
+        if not self.goal_basis:
 
-        para_end_p = end_pos
-        para_end = para_end_p[..., None]
+            if self.end_cond_order == -1:
 
-        if self.end_cond_order == 2:
-            para_end_v = para_end_p - \
-                         torch.einsum("...i,...->...i", end_vel,
-                                      self.phase_generator.tau) * \
-                         (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
-                          self.knots_vec[self.num_ctrlp - 1]) * self.degree_p
-            # para_end_v = para_end_p - (end_vel * self.phase_generator.tau) * \
-            #               (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
-            #                self.knots_vec[self.num_ctrlp-1]) * self.degree_p
-            para_end = torch.cat([para_end_v[..., None], para_end], dim=-1)
+                para_end = torch.einsum("...i,...->...i", end_vel,
+                                        self.phase_generator.tau) * \
+                           (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
+                            self.knots_vec[self.num_ctrlp - 1]) /self.degree_p
+                return para_end[..., None]
 
-        return para_end
+            para_end_p = end_pos
+            para_end = para_end_p[..., None]
+
+            if self.end_cond_order == 2:
+                para_end_v = para_end_p - \
+                             torch.einsum("...i,...->...i", end_vel,
+                                          self.phase_generator.tau) * \
+                             (self.knots_vec[
+                                  self.num_ctrlp - 1 + self.degree_p] -
+                              self.knots_vec[
+                                  self.num_ctrlp - 1]) / self.degree_p
+                para_end = torch.cat([para_end_v[..., None], para_end], dim=-1)
+
+            return para_end
+
+        else:
+
+            if self.end_cond_order == -1:
+                para_end_v = -torch.einsum("...i,...->...i", end_vel,
+                                        self.phase_generator.tau) * \
+                           (self.knots_vec[self.num_ctrlp - 1 + self.degree_p] -
+                            self.knots_vec[self.num_ctrlp - 1]) /self.degree_p
+                para_end_pos = torch.zeros_like(end_vel, dtype=self.dtype, device=self.device)
+                para_end = torch.cat([para_end_v[...,None], para_end_pos[...,None]], dim=-1)
+                return para_end
+
+            para_end = \
+                torch.zeros_like(end_pos, dtype=self.dtype, device=self.device)[
+                    ..., None]
+
+            if self.end_cond_order == 2:
+                para_end_v = (end_pos - \
+                              torch.einsum("...i,...->...i", end_vel,
+                                           self.phase_generator.tau)) * \
+                             (self.knots_vec[
+                                  self.num_ctrlp - 1 + self.degree_p] -
+                              self.knots_vec[
+                                  self.num_ctrlp - 1]) / self.degree_p
+                para_end = torch.cat([para_end_v[..., None], para_end], dim=-1)
+
+            return para_end
 
     def basis_multi_dofs(self,
                          times: torch.Tensor,
@@ -278,9 +321,19 @@ class UniBSplineBasis(BasisGenerator):
         # Get the not boundary condition relevant basis,
         # shape: [*add_dim, num_times, num_basis]
         if self.end_cond_order == -1:
-            basis_end_pos = (basis_single_dof[..., -1] + basis_single_dof[..., -2])[..., None]
-            basis_single_dof_ = torch.cat([basis_single_dof[..., self.init_cond_order: self.num_ctrlp-2],
-                                          basis_end_pos], dim=-1)
+            if self.goal_basis:
+                basis_single_dof_ = torch.cat([basis_single_dof[..., self.init_cond_order: -3],
+                                               basis_single_dof[..., -1:]], dim=-1)
+                basis_single_dof_[..., -1] += self.dup * basis_single_dof[..., -3]
+                if self.init_cond_order == 2:
+                    basis_single_dof_[..., -1] -= self.dup * basis_single_dof[..., 1]
+            else:
+                basis_end_pos = \
+                    (basis_single_dof[..., -1] + basis_single_dof[..., -2])[
+                        ..., None]
+                basis_single_dof_ = torch.cat([basis_single_dof[...,
+                                               self.init_cond_order: self.num_ctrlp - 2],
+                                               basis_end_pos], dim=-1)
         else:
             basis_single_dof_ = basis_single_dof[..., self.init_cond_order:
                                             self.num_ctrlp-self.end_cond_order]
@@ -299,5 +352,10 @@ class UniBSplineBasis(BasisGenerator):
         # Return
         return basis_multi_dofs
 
+    @property
+    def dup(self):
+
+        return (self.knots_vec[1 + self.degree_p] - self.knots_vec[1]) \
+                    / self.degree_p
 
 
