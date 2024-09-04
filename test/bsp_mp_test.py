@@ -17,8 +17,10 @@ def get_mp_config():
     cfg.mp_args.num_basis = 10
     cfg.mp_args.degree_p = 4
     cfg.mp_args.init_condition_order = 2
-    cfg.mp_args.end_condition_order = -1
+    # cfg.mp_args.end_condition_order = -1
+    cfg.mp_args.end_condition_order = 2
     cfg.mp_args.weights_scale = 0.9
+    cfg.mp_args.goal_basis = True
 
     # assume we have 3 trajectories in a batch
     num_traj = 3
@@ -29,14 +31,19 @@ def get_mp_config():
     scale_delay = util.add_expand_dim(scale_delay, [0], [num_traj])
 
     # Get params
-    params = torch.Tensor([100, 200, 300, -100, -200, -300,
-                           100, 200, 300, 5] * cfg.num_dof)
+    # params = torch.Tensor([100, 200, 300, -100, -200, -300,
+    #                        100, 200, 300, 5] * cfg.num_dof)
+    params = torch.Tensor([2, 2, 2, 2, 2, 2,
+                           2, 2, 2, 2] * cfg.num_dof)
     params = util.add_expand_dim(params, [0], [num_traj])
     params = torch.cat([scale_delay, params], dim=-1)
 
     diag = torch.Tensor([10, 20, 30, 10, 20, 30,
                          10, 20, 30, 10]* cfg.num_dof)
+    diag = torch.Tensor([0.1, 0.2, 0.3, 0.1, 0.2, 0.3,
+                         0.1, 0.2, 0.3, 0.1] * cfg.num_dof)
     off_diag = torch.linspace(-9.5, 9.4, 190)
+    off_diag = torch.linspace(-0.1, 0.1, 190)
     params_L = util.build_lower_matrix(diag, off_diag)
     params_L = util.add_expand_dim(params_L, [0], [num_traj])
 
@@ -47,9 +54,9 @@ def get_mp_config():
     # Get IC
     init_time = scale_delay[:, 1]
     init_pos = 5 * torch.ones([num_traj, cfg.num_dof])
-    init_vel = torch.ones_like(init_pos) * 10
+    init_vel = torch.ones_like(init_pos) * -2
     end_pos = 0 * torch.ones([num_traj, cfg.num_dof])
-    end_vel = torch.ones_like(end_pos) * 10
+    end_vel = torch.ones_like(end_pos) * -2
 
     return cfg, params, params_L, times, init_time, init_pos, init_vel, end_pos, end_vel
 
@@ -61,6 +68,7 @@ def set_traj():
     mp.update_inputs(times, params, params_L, init_time, init_pos, init_vel, end_pos=end_pos, end_vel=end_vel)
     pos = mp.get_traj_pos()
     vel = mp.get_traj_vel()
+    acc = mp.get_traj_acc()
 
     pos_flat = mp.get_traj_pos(flat_shape=True)
     pos_cov = mp.get_traj_pos_cov()

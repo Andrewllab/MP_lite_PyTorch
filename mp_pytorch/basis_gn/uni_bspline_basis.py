@@ -11,7 +11,7 @@ class UniBSplineBasis(BasisGenerator):
                  phase_generator: LinearPhaseGenerator,
                  num_basis: int = 10,
                  degree_p: int = 3,
-                 dtype: torch.dtype = torch.float64,
+                 dtype: torch.dtype = torch.float32,
                  device: torch.device = 'cpu',
                  **kwargs):
         """

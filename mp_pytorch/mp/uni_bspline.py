@@ -19,7 +19,7 @@ class UniformBSpline(ProbabilisticMPInterface):
                  num_dof: int,
                  weights_scale: float = 1.,
                  goal_scale: float = 1.,
-                 dtype: torch.dtype = torch.float64,
+                 dtype: torch.dtype = torch.float32,
                  device: torch.device = 'cpu',
                  **kwargs,
                  ):
@@ -63,9 +63,11 @@ class UniformBSpline(ProbabilisticMPInterface):
         super().set_initial_conditions(init_time, init_pos, init_vel)
         if not torch.all(self.init_time == self.phase_gn.delay):
             logging.warning("the initial condition only applies at the 0+delay time point")
+        end_pos = torch.as_tensor(kwargs["end_pos"], dtype=self.dtype, device=self.device)-\
+            self.init_pos if kwargs.get("end_pos") is not None else None
         self.params_init = self.basis_gn.compute_init_params(
             torch.zeros_like(self.init_pos, dtype=self.dtype,device=self.device),
-            self.init_vel, **kwargs)
+            self.init_vel, end_pos=end_pos)
         if self.params_init is not None:
             self.params_init /= self.weights_scale
 
@@ -317,7 +319,6 @@ class UniformBSpline(ProbabilisticMPInterface):
                         params = torch.cat((params, self.params_end), dim=-1)
 
                 vel_ctrlp = self.basis_gn.velocity_control_points(params)
-                vel_params = vel_ctrlp
 
             else:
                 if self.basis_gn.end_cond_order == -1:
@@ -343,11 +344,10 @@ class UniformBSpline(ProbabilisticMPInterface):
                                        dim=-1)
 
                 vel_ctrlp = self.basis_gn.velocity_control_points(params[..., :-1])
-                vel_params = torch.cat([vel_ctrlp, params[..., -1:]], dim=-1)
-
+                vel_ctrlp = torch.cat([vel_ctrlp, params[..., -1:]], dim=-1)
 
             # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
-
+            vel_ctrlp = torch.einsum("...ij,...->...ij", vel_ctrlp, 1/self.tau)
             if ctrl_only:
                 return vel_ctrlp
 
@@ -357,7 +357,7 @@ class UniformBSpline(ProbabilisticMPInterface):
             # Einsum shape: [*add_dim, num_times, num_ctrlp-1],
             #               [*add_dim, num_dof, num_ctrlp-1]
             #            -> [*add_dim, num_times, num_dof]
-            vel = torch.einsum('...ik,...jk->...ij', vel_basis, vel_params)
+            vel = torch.einsum('...ik,...jk->...ij', vel_basis, vel_ctrlp)
 
             self.vel = vel
 
@@ -428,6 +428,7 @@ class UniformBSpline(ProbabilisticMPInterface):
                 weights_goal_scale = self.weights_goal_scale[2:-1]
 
             # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
+            acc_ctrlp = torch.einsum("...ij,...->...ij", acc_ctrlp, 1/self.tau)
 
             if ctrl_only:
                 return acc_ctrlp
@@ -506,10 +507,8 @@ class UniformBSpline(ProbabilisticMPInterface):
                 init_vel = torch.einsum("...i,...->...i",
                                         torch.diff(trajs, dim=-2)[..., 0, :],
                                         1/dt)
-            if self.basis_gn.goal_basis:
-                end_pos = trajs[..., -1, :]
-                if kwargs.get("end_pos") is not None:
-                    end_pos = kwargs["end_pos"]
+            end_pos = kwargs.get("end_pos", trajs[..., -1, :]) \
+                if self.basis_gn.goal_basis else None
             self.set_initial_conditions(init_time, init_pos, init_vel, end_pos=end_pos)
             if self.params_init is not None:
                 dummy_params = torch.cat([self.params_init, dummy_params],
