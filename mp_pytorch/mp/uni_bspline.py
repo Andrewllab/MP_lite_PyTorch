@@ -274,6 +274,8 @@ class UniformBSpline(ProbabilisticMPInterface):
 
             # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
             vel_ctrlp = self.basis_gn.velocity_control_points(params)
+            vel_ctrlp = torch.einsum("...ij,...->...ij", vel_ctrlp,
+                                     1 / self.tau)
 
             if ctrl_only:
                 return vel_ctrlp
@@ -325,6 +327,8 @@ class UniformBSpline(ProbabilisticMPInterface):
 
             # velocity control points shape: [*add_dim, num_dof, num_ctrlp-1]
             acc_ctrlp = self.basis_gn.acceleration_control_points(params)
+            acc_ctrlp = torch.einsum("...ij,...->...ij", acc_ctrlp,
+                                     1 / self.tau)
 
             if ctrl_only:
                 return acc_ctrlp
