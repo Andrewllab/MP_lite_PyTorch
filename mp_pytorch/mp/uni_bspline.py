@@ -133,13 +133,11 @@ class UniformBSpline(ProbabilisticMPInterface):
                     temp = params[..., -1] * self.basis_gn.dup* self.goal_scale/self.weights_scale
                     goal_term = params[..., -1:]
                     if self.params_init is not None:
-                        param_i = self.params_init
-                        param_i[..., 1] -= temp
-                        params = torch.cat([param_i, params[..., :-1]], dim=-1)
+                        params = torch.cat([self.params_init, params[..., :-1]], dim=-1)
+                        params[..., 1] -= temp
                     if self.params_end is not None:
-                        param_e = self.params_end
-                        param_e[..., -2] += temp
-                        params = torch.cat([params, param_e], dim=-1)
+                        params = torch.cat([params, self.params_end], dim=-1)
+                        params[..., -2] += temp
                     params = torch.cat([params, goal_term], dim=-1)
                 else:
                     if self.params_init is not None:
@@ -322,16 +320,16 @@ class UniformBSpline(ProbabilisticMPInterface):
 
             else:
                 if self.basis_gn.end_cond_order == -1:
-                    temp = params[..., -1] * self.basis_gn.dup * self.goal_scale/self.weights_scale
+                    temp = params[
+                               ..., -1] * self.basis_gn.dup * self.goal_scale / self.weights_scale
                     goal_term = params[..., -1:]
                     if self.params_init is not None:
-                        param_i = self.params_init
-                        param_i[..., 1] -= temp
-                        params = torch.cat([param_i, params[..., :-1]], dim=-1)
+                        params = torch.cat([self.params_init, params[..., :-1]],
+                                           dim=-1)
+                        params[..., 1] -= temp
                     if self.params_end is not None:
-                        param_e = self.params_end
-                        param_e[..., -2] += temp
-                        params = torch.cat([params, param_e], dim=-1)
+                        params = torch.cat([params, self.params_end], dim=-1)
+                        params[..., -2] += temp
                     params = torch.cat([params, goal_term], dim=-1)
                 else:
                     if self.params_init is not None:
@@ -402,16 +400,16 @@ class UniformBSpline(ProbabilisticMPInterface):
 
             else:
                 if self.basis_gn.end_cond_order == -1:
-                    temp = params[..., -1] * self.basis_gn.dup * self.goal_scale/self.weights_scale
+                    temp = params[
+                               ..., -1] * self.basis_gn.dup * self.goal_scale / self.weights_scale
                     goal_term = params[..., -1:]
                     if self.params_init is not None:
-                        param_i = self.params_init
-                        param_i[..., 1] -= temp
-                        params = torch.cat([param_i, params[..., :-1]], dim=-1)
+                        params = torch.cat([self.params_init, params[..., :-1]],
+                                           dim=-1)
+                        params[..., 1] -= temp
                     if self.params_end is not None:
-                        param_e = self.params_end
-                        param_e[..., -2] += temp
-                        params = torch.cat([params, param_e], dim=-1)
+                        params = torch.cat([params, self.params_end], dim=-1)
+                        params[..., -2] += temp
                     params = torch.cat([params, goal_term], dim=-1)
                 else:
                     if self.params_init is not None:
