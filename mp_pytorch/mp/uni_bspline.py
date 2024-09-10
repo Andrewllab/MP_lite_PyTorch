@@ -537,9 +537,13 @@ class UniformBSpline(ProbabilisticMPInterface):
         pos_det = torch.einsum('...ik,...jk->...ij', basis_single_dof, dummy_params)
         # swtich axes to [*add_dim, num_dof, num_times]
         pos_det = torch.einsum('...ij->...ji', pos_det)
+        if self.basis_gn.init_cond_order != 0:
+            init_bias = self.init_pos.unsqueeze(-1).expand(*self.init_pos.shape,
+                                                           pos_det.size(-1))
+            pos_det += init_bias
         pos_det = pos_det.reshape(*self.add_dim, -1)
 
-        if self.basis_gn.goal_basis and self.basis_gn.end_cond_order==-1:
+        if self.basis_gn.goal_basis: #and self.basis_gn.end_cond_order==-1:
             weights_goal_scale = torch.ones(self.num_basis, dtype=self.dtype, device=self.device)
             weights_goal_scale[:-1] *= self.weights_scale
             weights_goal_scale[-1] *= self.goal_scale
