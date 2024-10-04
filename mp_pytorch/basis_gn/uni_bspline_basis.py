@@ -40,6 +40,8 @@ class UniBSplineBasis(BasisGenerator):
         self.goal_basis = kwargs.get("goal_basis", False)
         self.num_ctrlp = num_basis + self.init_cond_order + abs(self.end_cond_order)
         # if self.goal_basis and self.end_cond_order==-1:
+        # if self.goal_basis and  self.end_cond_order == 0:
+        #     self.num_ctrlp -= 1
         #     self.num_ctrlp += 1
         # number of knots needed, with respect to B-sp degree and number of
         # control points ( num_basis + init_cond_order+end_cond_order)
@@ -337,6 +339,8 @@ class UniBSplineBasis(BasisGenerator):
         else:
             basis_single_dof_ = basis_single_dof[..., self.init_cond_order:
                                             self.num_ctrlp-self.end_cond_order]
+            # basis_single_dof_ = basis_single_dof[..., self.init_cond_order:
+            #                                           self.init_cond_order+self.num_basis]
 
         # Multiple Dofs, shape:
         # [*add_dim, num_dof * num_times, num_dof * num_basis]

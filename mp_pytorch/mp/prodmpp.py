@@ -119,12 +119,12 @@ class ProDMPP(ProDMP):
             dt = (times[..., 1] - times[..., 0])
             init_vel = torch.einsum("...i,...->...i",
                                     torch.diff(trajs, dim=-2)[..., 0, :],
-                                    dt)
+                                    1/dt)
             init_acc = None
             if self.order == 3:
                 init_acc = torch.einsum("...i,...->...i",
                                         torch.diff(trajs, n=2, dim=-2)[..., 0, :],
-                                        dt)
+                                        1/dt)
 
         # Setup stuff
         self.set_add_dim(list(trajs.shape[:-2]))
@@ -430,68 +430,68 @@ class ProDMPP(ProDMP):
         # [*add_dim, num_smp, num_times, num_dof]
         # or [*add_dim, num_smp, num_dof * num_times]
         if self.order==2:
-            super().sample_trajectories(times, params, params_L,
+            pos_smp, vel_smp = super().sample_trajectories(times, params, params_L,
                             init_time, init_pos, init_vel,
                             num_smp, flat_shape, **kwargs)
-
-        init_acc = kwargs.get("init_acc")
-        if all([data is None for data in {times, params, params_L, init_time,
-                                          init_pos, init_vel, init_acc}]):
-            times = self.times
-            params = self.params
-            params_L = self.params_L
-            init_time = self.init_time
-            init_pos = self.init_pos
-            init_vel = self.init_vel
-            init_acc =self.init_acc
-
-        num_add_dim = params.ndim - 1
-
-        # Add additional sample axis to time
-        # Shape [*add_dim, num_smp, num_times]
-        times_smp = mp_pytorch.util.add_expand_dim(times, [num_add_dim], [num_smp])
-
-        # Sample parameters, shape [num_smp, *add_dim, num_mp_params]
-        params_smp = MultivariateNormal(loc=params,
-                                        scale_tril=params_L,
-                                        validate_args=False).rsample([num_smp])
-
-        # Switch axes to [*add_dim, num_smp, num_mp_params]
-        params_smp = torch.einsum('i...j->...ij', params_smp)
-
-        params_super = self.basis_gn.get_params()
-        if params_super.nelement() != 0:
-            params_super_smp = mp_pytorch.util.add_expand_dim(params_super, [-2],
-                                                   [num_smp])
-            params_smp = torch.cat([params_super_smp, params_smp], dim=-1)
-
-        # Add additional sample axis to initial condition
-        if init_time is not None:
-            init_time_smp = mp_pytorch.util.add_expand_dim(init_time, [num_add_dim], [num_smp])
-            init_pos_smp = mp_pytorch.util.add_expand_dim(init_pos, [num_add_dim], [num_smp])
-            init_vel_smp = mp_pytorch.util.add_expand_dim(init_vel, [num_add_dim], [num_smp])
-            init_acc_smp = mp_pytorch.util.add_expand_dim(init_acc, [num_add_dim], [num_smp])
         else:
-            init_time_smp = None
-            init_pos_smp = None
-            init_vel_smp = None
-            init_acc_smp = None
+            init_acc = kwargs.get("init_acc")
+            if all([data is None for data in {times, params, params_L, init_time,
+                                              init_pos, init_vel, init_acc}]):
+                times = self.times
+                params = self.params
+                params_L = self.params_L
+                init_time = self.init_time
+                init_pos = self.init_pos
+                init_vel = self.init_vel
+                init_acc =self.init_acc
 
-        # Update inputs
-        self.reset()
-        self.update_inputs(times_smp, params_smp, None,
-                           init_time_smp, init_pos_smp, init_vel_smp, init_acc=init_acc_smp)
+            num_add_dim = params.ndim - 1
 
-        # Get sample trajectories
-        pos_smp = self.get_traj_pos(flat_shape=flat_shape)
-        vel_smp = self.get_traj_vel(flat_shape=flat_shape)
+            # Add additional sample axis to time
+            # Shape [*add_dim, num_smp, num_times]
+            times_smp = mp_pytorch.util.add_expand_dim(times, [num_add_dim], [num_smp])
 
-        # Recover old inputs
-        if params_super.nelement() != 0:
-            params = torch.cat([params_super, params], dim=-1)
-        self.reset()
-        self.update_inputs(times, params, None, init_time, init_pos,
-                           init_vel, init_acc=init_acc)
+            # Sample parameters, shape [num_smp, *add_dim, num_mp_params]
+            params_smp = MultivariateNormal(loc=params,
+                                            scale_tril=params_L,
+                                            validate_args=False).rsample([num_smp])
+
+            # Switch axes to [*add_dim, num_smp, num_mp_params]
+            params_smp = torch.einsum('i...j->...ij', params_smp)
+
+            params_super = self.basis_gn.get_params()
+            if params_super.nelement() != 0:
+                params_super_smp = mp_pytorch.util.add_expand_dim(params_super, [-2],
+                                                       [num_smp])
+                params_smp = torch.cat([params_super_smp, params_smp], dim=-1)
+
+            # Add additional sample axis to initial condition
+            if init_time is not None:
+                init_time_smp = mp_pytorch.util.add_expand_dim(init_time, [num_add_dim], [num_smp])
+                init_pos_smp = mp_pytorch.util.add_expand_dim(init_pos, [num_add_dim], [num_smp])
+                init_vel_smp = mp_pytorch.util.add_expand_dim(init_vel, [num_add_dim], [num_smp])
+                init_acc_smp = mp_pytorch.util.add_expand_dim(init_acc, [num_add_dim], [num_smp])
+            else:
+                init_time_smp = None
+                init_pos_smp = None
+                init_vel_smp = None
+                init_acc_smp = None
+
+            # Update inputs
+            self.reset()
+            self.update_inputs(times_smp, params_smp, None,
+                               init_time_smp, init_pos_smp, init_vel_smp, init_acc=init_acc_smp)
+
+            # Get sample trajectories
+            pos_smp = self.get_traj_pos(flat_shape=flat_shape)
+            vel_smp = self.get_traj_vel(flat_shape=flat_shape)
+
+            # Recover old inputs
+            if params_super.nelement() != 0:
+                params = torch.cat([params_super, params], dim=-1)
+            self.reset()
+            self.update_inputs(times, params, None, init_time, init_pos,
+                               init_vel, init_acc=init_acc)
 
         return pos_smp, vel_smp
 
