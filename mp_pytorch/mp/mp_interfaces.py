@@ -16,7 +16,7 @@ import mp_pytorch.util as util
 from mp_pytorch.basis_gn import BasisGenerator
 
 
-class MPInterface(ABC):
+class MPInterface(ABC, torch.nn.Module):
     @abstractmethod
     def __init__(self,
                  basis_gn: BasisGenerator,

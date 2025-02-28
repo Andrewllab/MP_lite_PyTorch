@@ -12,7 +12,7 @@ import torch
 # Classes of Phase Generator
 
 
-class PhaseGenerator(ABC):
+class PhaseGenerator(ABC, torch.nn.Module):
 
     def __init__(self,
                  tau: float = 1.0,

@@ -6,7 +6,7 @@ from typing import Tuple
 from mp_pytorch.phase_gn.phase_generator import *
 
 
-class BasisGenerator(ABC):
+class BasisGenerator(ABC, torch.nn.Module):
     @abstractmethod
     def __init__(self,
                  phase_generator: PhaseGenerator,
