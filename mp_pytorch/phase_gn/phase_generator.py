@@ -34,6 +34,7 @@ class PhaseGenerator(ABC, torch.nn.Module):
             *args: other arguments list
             **kwargs: other keyword arguments
         """
+        super().__init__()
         self.dtype = dtype
         self.device = device
 

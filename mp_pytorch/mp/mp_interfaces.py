@@ -35,6 +35,7 @@ class MPInterface(ABC, torch.nn.Module):
             device: torch.device = 'cpu',
             **kwargs: keyword arguments
         """
+        super().__init__()
         self.dtype = dtype
         self.device = device
 

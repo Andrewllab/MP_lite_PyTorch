@@ -22,6 +22,7 @@ class BasisGenerator(ABC, torch.nn.Module):
             dtype: torch data type
             device: torch device to run on
         """
+        super().__init__()
         self.dtype = dtype
         self.device = device
 
