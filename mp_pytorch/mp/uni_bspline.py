@@ -25,21 +25,21 @@ class UniformBSpline(ProbabilisticMPInterface):
                  ):
         super().__init__(basis_gn, num_dof, weights_scale, dtype, device, **kwargs)
 
-        # self.end_pos = None
-        # self.end_vel = None
-        self.register_buffer("end_pos", None, persistent=False)
-        self.register_buffer("end_vel", None, persistent=False)
+        self.end_pos = None
+        self.end_vel = None
+        # self.register_buffer("end_pos", None, persistent=False)
+        # self.register_buffer("end_vel", None, persistent=False)
 
-        # self.params_init = None
-        # self.params_end = None
-        self.register_buffer("params_init", None, persistent=False)
-        self.register_buffer("params_end", None, persistent=False)
+        self.params_init = None
+        self.params_end = None
+        # self.register_buffer("params_init", None, persistent=False)
+        # self.register_buffer("params_end", None, persistent=False)
 
-        # self.acc = None
-        self.register_buffer("acc", None, persistent=False)
+        self.acc = None
+        # self.register_buffer("acc", None, persistent=False)
 
         # self.goal_scale = goal_scale
-        self.register_buffer("goal_scale", torch.as_tensor(goal_scale, dtype=self.dtype, device=self.device), persistent=False)
+        self.register_buffer("goal_scale", torch.tensor(goal_scale, dtype=self.dtype, device=self.device), persistent=False)
         self.register_buffer("weights_goal_scale", None, persistent=False)
         self.weights_goal_scale = self.get_weights_goal_scale()
 

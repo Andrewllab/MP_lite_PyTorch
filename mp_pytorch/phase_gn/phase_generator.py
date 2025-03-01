@@ -38,8 +38,8 @@ class PhaseGenerator(ABC, torch.nn.Module):
         # self.dtype = dtype
         # self.device = device
 
-        self.register_buffer('tau', torch.as_tensor(tau, dtype=dtype, device=device), persistent=False)
-        self.register_buffer("delay", torch.as_tensor(delay, dtype=dtype, device=device), persistent=False)
+        self.register_buffer('tau', torch.tensor(tau, dtype=dtype, device=device), persistent=False)
+        self.register_buffer("delay", torch.tensor(delay, dtype=dtype, device=device), persistent=False)
 
         self.learn_tau = learn_tau
         self.learn_delay = learn_delay

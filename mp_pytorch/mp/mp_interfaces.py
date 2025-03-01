@@ -51,59 +51,59 @@ class MPInterface(ABC, torch.nn.Module):
 
         # Scaling of weights
         weights_scale = \
-            torch.as_tensor(weights_scale, dtype=self.dtype, device=self.device)
+            torch.tensor(weights_scale, dtype=self.dtype, device=self.device)
         assert weights_scale.ndim <= 1, \
             "weights_scale should be float or 1-dim vector"
         self.register_buffer("weights_scale", weights_scale, persistent=False)
 
         # Value caches
         # Compute values at these time points
-        # self.times = None
+        self.times = None
         # self.register_buffer("times", torch.empty(0, dtype=self.dtype, device=self.device))
-        self.register_buffer("times", None, persistent=False)
+        # self.register_buffer("times", None, persistent=False)
 
         # Learnable parameters
-        # self.params = None
+        self.params = None
         # self.register_buffer("params", torch.empty(0, dtype=self.dtype, device=self.device))
-        self.register_buffer("params", None, persistent=False)
+        # self.register_buffer("params", None, persistent=False)
 
         # Initial conditions
-        # self.init_time = None
-        # self.init_pos = None
-        # self.init_vel = None
+        self.init_time = None
+        self.init_pos = None
+        self.init_vel = None
         # self.register_buffer("init_time", torch.empty(0, dtype=self.dtype, device=self.device))
         # self.register_buffer("init_pos", torch.empty(0, dtype=self.dtype, device=self.device))
         # self.register_buffer("init_vel", torch.empty(0, dtype=self.dtype, device=self.device))
-        self.register_buffer("init_time", None, persistent=False)
-        self.register_buffer("init_pos", None, persistent=False)
-        self.register_buffer("init_vel", None, persistent=False)
+        # self.register_buffer("init_time", None, persistent=False)
+        # self.register_buffer("init_pos", None, persistent=False)
+        # self.register_buffer("init_vel", None, persistent=False)
 
         # Runtime computation results, shall be reset every time when
         # inputs are reset
-        # self.pos = None
-        # self.vel = None
+        self.pos = None
+        self.vel = None
         # self.register_buffer("pos", torch.empty(0, dtype=self.dtype, device=self.device))
         # self.register_buffer("vel", torch.empty(0, dtype=self.dtype, device=self.device))
-        self.register_buffer("pos", None, persistent=False)
-        self.register_buffer("vel", None, persistent=False)
+        # self.register_buffer("pos", None, persistent=False)
+        # self.register_buffer("vel", None, persistent=False)
 
         # Flag of if the MP instance is finalized
         self.is_finalized = False
 
         # Local parameters bound
-        self.local_params_bound = kwargs.get("params_bound", None)
-        if not self.local_params_bound:
-            self.local_params_bound = torch.zeros([2, self._num_local_params],
+        local_params_bound = kwargs.get("params_bound", None)
+        if not local_params_bound:
+            local_params_bound = torch.zeros([2, self._num_local_params],
                                                   dtype=self.dtype,
                                                   device=self.device)
-            self.local_params_bound[0, :] = -torch.inf
-            self.local_params_bound[1, :] = torch.inf
+            local_params_bound[0, :] = -torch.inf
+            local_params_bound[1, :] = torch.inf
         else:
-            self.local_params_bound = torch.as_tensor(self.local_params_bound,
+            local_params_bound = torch.tensor(local_params_bound,
                                                       dtype=self.dtype,
                                                       device=self.device)
-        assert list(self.local_params_bound.shape) == [2,
-                                                       self._num_local_params]
+        assert list(local_params_bound.shape) == [2, self._num_local_params]
+        self.register_buffer("local_params_bound", local_params_bound, persistent=False)
 
 
     # def to(self, *args, **kwargs):
