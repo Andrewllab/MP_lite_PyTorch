@@ -23,15 +23,52 @@ class BasisGenerator(ABC, torch.nn.Module):
             device: torch device to run on
         """
         super().__init__()
-        self.dtype = dtype
-        self.device = device
 
         # Internal number of basis
         self._num_basis = num_basis
         self.phase_generator = phase_generator
 
+        # assert self.device == device, "phase generator and basis generator should be on the same device"
+        # assert self.dtype == dtype, "phase generator and basis generator shoud have same dtype"
+
         # Flag of finalized basis generator
         self.is_finalized = False
+
+    @property
+    def dtype(self):
+        return self.phase_generator.dtype
+
+    @property
+    def device(self):
+        return self.phase_generator.device
+
+
+    # def to(self, *args, **kwargs):
+    #     """Override to() to update self.device and self.dtype."""
+    #     # Call the default .to() to move parameters and buffers
+    #     super().to(*args, **kwargs)
+    #
+    #     # Extract device and dtype from arguments
+    #     device = kwargs.get("device", None)
+    #     dtype = kwargs.get("dtype", None)
+    #
+    #     # If device is a positional argument, extract it
+    #     if len(args) > 0 and isinstance(args[0], torch.device):
+    #         device = args[0]
+    #     elif len(args) > 0 and isinstance(args[0], str):
+    #         device = torch.device(args[0])
+    #
+    #     # If dtype is a positional argument, extract it
+    #     if len(args) > 1 and isinstance(args[1], torch.dtype):
+    #         dtype = args[1]
+    #
+    #     # Update self.device and self.dtype if they were provided
+    #     if device is not None:
+    #         self.device = device
+    #     if dtype is not None:
+    #         self.dtype = dtype
+    #
+    #     return self  # Return self for chaining
 
     @property
     def num_basis(self) -> int:

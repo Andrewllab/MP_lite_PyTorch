@@ -36,8 +36,6 @@ class MPInterface(ABC, torch.nn.Module):
             **kwargs: keyword arguments
         """
         super().__init__()
-        self.dtype = dtype
-        self.device = device
 
         # Additional batch dimension
         self.add_dim = list()
@@ -45,31 +43,49 @@ class MPInterface(ABC, torch.nn.Module):
         # The basis generators
         self.basis_gn = basis_gn
 
+        # assert self.device == device, "Device shoud be basis_gn device"
+        # assert self.dtype == dtype, "Data type shoud be basis_gn dtype"
+
         # Number of DoFs
         self.num_dof = num_dof
 
         # Scaling of weights
-        self.weights_scale = \
+        weights_scale = \
             torch.as_tensor(weights_scale, dtype=self.dtype, device=self.device)
-        assert self.weights_scale.ndim <= 1, \
+        assert weights_scale.ndim <= 1, \
             "weights_scale should be float or 1-dim vector"
+        self.register_buffer("weights_scale", weights_scale, persistent=False)
 
         # Value caches
         # Compute values at these time points
-        self.times = None
+        # self.times = None
+        # self.register_buffer("times", torch.empty(0, dtype=self.dtype, device=self.device))
+        self.register_buffer("times", None, persistent=False)
 
         # Learnable parameters
-        self.params = None
+        # self.params = None
+        # self.register_buffer("params", torch.empty(0, dtype=self.dtype, device=self.device))
+        self.register_buffer("params", None, persistent=False)
 
         # Initial conditions
-        self.init_time = None
-        self.init_pos = None
-        self.init_vel = None
+        # self.init_time = None
+        # self.init_pos = None
+        # self.init_vel = None
+        # self.register_buffer("init_time", torch.empty(0, dtype=self.dtype, device=self.device))
+        # self.register_buffer("init_pos", torch.empty(0, dtype=self.dtype, device=self.device))
+        # self.register_buffer("init_vel", torch.empty(0, dtype=self.dtype, device=self.device))
+        self.register_buffer("init_time", None, persistent=False)
+        self.register_buffer("init_pos", None, persistent=False)
+        self.register_buffer("init_vel", None, persistent=False)
 
         # Runtime computation results, shall be reset every time when
         # inputs are reset
-        self.pos = None
-        self.vel = None
+        # self.pos = None
+        # self.vel = None
+        # self.register_buffer("pos", torch.empty(0, dtype=self.dtype, device=self.device))
+        # self.register_buffer("vel", torch.empty(0, dtype=self.dtype, device=self.device))
+        self.register_buffer("pos", None, persistent=False)
+        self.register_buffer("vel", None, persistent=False)
 
         # Flag of if the MP instance is finalized
         self.is_finalized = False
@@ -88,6 +104,43 @@ class MPInterface(ABC, torch.nn.Module):
                                                       device=self.device)
         assert list(self.local_params_bound.shape) == [2,
                                                        self._num_local_params]
+
+
+    # def to(self, *args, **kwargs):
+    #     """Override to() to update self.device and self.dtype."""
+    #     # Call the default .to() to move parameters and buffers
+    #     super().to(*args, **kwargs)
+    #
+    #     # Extract device and dtype from arguments
+    #     device = kwargs.get("device", None)
+    #     dtype = kwargs.get("dtype", None)
+    #
+    #     # If device is a positional argument, extract it
+    #     if len(args) > 0 and isinstance(args[0], torch.device):
+    #         device = args[0]
+    #     elif len(args) > 0 and isinstance(args[0], str):
+    #         device = torch.device(args[0])
+    #
+    #     # If dtype is a positional argument, extract it
+    #     if len(args) > 1 and isinstance(args[1], torch.dtype):
+    #         dtype = args[1]
+    #
+    #     # Update self.device and self.dtype if they were provided
+    #     if device is not None:
+    #         self.device = device
+    #     if dtype is not None:
+    #         self.dtype = dtype
+    #
+    #     return self  # Return self for chaining
+
+    @property
+    def device(self):
+        return self.basis_gn.device
+
+
+    @property
+    def dtype(self):
+        return self.basis_gn.dtype
 
     @property
     def learn_tau(self):

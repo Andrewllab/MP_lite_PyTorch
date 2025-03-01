@@ -48,11 +48,13 @@ class UniBSplineBasis(BasisGenerator):
         num_knots = self.degree_p + 1 + self.num_ctrlp
         num_knots_non_rep_inside_1 = num_knots - 2*self.degree_p
         # uniform knots vector
-        self.knots_vec = torch.linspace(0, 1, num_knots_non_rep_inside_1,
+        knots_vec = torch.linspace(0, 1, num_knots_non_rep_inside_1,
                                         dtype=dtype, device=device)
         knots_prev = torch.zeros(self.degree_p, dtype=dtype, device=device)
         knots_pro = torch.ones(self.degree_p, dtype=dtype, device=device)
-        self.knots_vec = torch.cat([knots_prev, self.knots_vec, knots_pro])
+        knots_vec = torch.cat([knots_prev, knots_vec, knots_pro])
+
+        self.register_buffer("knots_vec", knots_vec, persistent=False)
 
     def basis(self, times: torch.Tensor) -> torch.Tensor:
         """

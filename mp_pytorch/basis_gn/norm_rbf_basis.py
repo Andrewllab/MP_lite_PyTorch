@@ -55,7 +55,7 @@ class NormalizedRBFBasisGenerator(BasisGenerator):
                                   dim=-1)
             centers_p = self.phase_generator.unbound_phase(centers_t)
             # RBF centers in phase scope
-            self.centers_p = centers_p[:-1]
+            centers_p = centers_p[:-1]
 
             tmp_bandwidth = centers_p[1:] - centers_p[:-1]
             if isinstance(phase_generator, ExpDecayPhaseGenerator) \
@@ -68,16 +68,19 @@ class NormalizedRBFBasisGenerator(BasisGenerator):
                                       + 0.5 * self.phase_generator.tau],
                                      dtype=self.dtype, device=self.device)
             # RBF centers in phase scope
-            self.centers_p = self.phase_generator.unbound_phase(centers_t)
+            centers_p = self.phase_generator.unbound_phase(centers_t)
             tmp_bandwidth = torch.tensor([1], dtype=self.dtype,
                                          device=self.device)
 
         else:
             raise NotImplementedError
 
+        self.register_buffer("centers_p", centers_p, persistent=False)
+
         # The Centers should not overlap too much (makes w almost random due
         # to aliasing effect).Empirically chosen
-        self.bandwidth = self.basis_bandwidth_factor / (tmp_bandwidth ** 2)
+        bandwidth = self.basis_bandwidth_factor / (tmp_bandwidth ** 2)
+        self.register_buffer("bandwidth", bandwidth, persistent=False)
 
     def basis(self, times: torch.Tensor) -> torch.Tensor:
         """

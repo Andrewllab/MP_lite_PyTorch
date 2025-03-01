@@ -35,12 +35,12 @@ class PhaseGenerator(ABC, torch.nn.Module):
             **kwargs: other keyword arguments
         """
         super().__init__()
-        self.dtype = dtype
-        self.device = device
+        # self.dtype = dtype
+        # self.device = device
 
-        self.tau = torch.as_tensor(tau, dtype=self.dtype, device=self.device)
-        self.delay = torch.as_tensor(delay, dtype=self.dtype,
-                                     device=self.device)
+        self.register_buffer('tau', torch.as_tensor(tau, dtype=dtype, device=device), persistent=False)
+        self.register_buffer("delay", torch.as_tensor(delay, dtype=dtype, device=device), persistent=False)
+
         self.learn_tau = learn_tau
         self.learn_delay = learn_delay
 
@@ -52,6 +52,41 @@ class PhaseGenerator(ABC, torch.nn.Module):
             assert len(self.delay_bound) == 2
 
         self.is_finalized = False
+
+    @property
+    def dtype(self):
+        return self.tau.dtype
+
+    @property
+    def device(self):
+        return self.tau.device
+
+    # def to(self, *args, **kwargs):
+    #     """Override to() to update self.device and self.dtype."""
+    #     # Call the default .to() to move parameters and buffers
+    #     super().to(*args, **kwargs)
+    #
+    #     # Extract device and dtype from arguments
+    #     device = kwargs.get("device", None)
+    #     dtype = kwargs.get("dtype", None)
+    #
+    #     # If device is a positional argument, extract it
+    #     if len(args) > 0 and isinstance(args[0], torch.device):
+    #         device = args[0]
+    #     elif len(args) > 0 and isinstance(args[0], str):
+    #         device = torch.device(args[0])
+    #
+    #     # If dtype is a positional argument, extract it
+    #     if len(args) > 1 and isinstance(args[1], torch.dtype):
+    #         dtype = args[1]
+    #
+    #     # Update self.device and self.dtype if they were provided
+    #     if device is not None:
+    #         self.device = device
+    #     if dtype is not None:
+    #         self.dtype = dtype
+    #
+    #     return self  # Return self for chaining
 
     @abstractmethod
     def phase(self, times: torch.Tensor) -> torch.Tensor:
