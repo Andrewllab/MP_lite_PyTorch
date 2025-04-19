@@ -70,11 +70,11 @@ class UniformBSpline(ProbabilisticMPInterface):
         super().set_initial_conditions(init_time, init_pos, init_vel)
         if not torch.all(self.init_time == self.phase_gn.delay):
             logging.warning("the initial condition only applies at the 0+delay time point")
-        end_pos = torch.as_tensor(kwargs["end_pos"], dtype=self.dtype, device=self.device)-\
-            self.init_pos if kwargs.get("end_pos") is not None else None
+        end_pos = torch.as_tensor(kwargs["end_pos"], dtype=self.dtype, device=self.device) if kwargs.get("end_pos") is not None else None
         self.params_init = self.basis_gn.compute_init_params(
-            torch.zeros_like(self.init_pos, dtype=self.dtype,device=self.device),
-            self.init_vel, end_pos=end_pos)
+            self.init_pos,
+            self.init_vel,
+            end_pos=end_pos)
         if self.params_init is not None:
             self.params_init /= self.weights_scale
 
@@ -83,8 +83,6 @@ class UniformBSpline(ProbabilisticMPInterface):
         self.end_pos = \
             torch.as_tensor(end_pos, device=self.device, dtype=self.dtype) \
                 if end_pos is not None else None
-        if self.end_pos is not None and self.init_pos is not None:
-            self.end_pos = self.end_pos - self.init_pos
         self.end_vel = \
             torch.as_tensor(end_vel, device=self.device, dtype=self.dtype) \
                 if end_vel is not None else None
@@ -163,7 +161,7 @@ class UniformBSpline(ProbabilisticMPInterface):
             #               [*add_dim, num_dof, num_ctrlp]
             #            -> [*add_dim, num_times, num_dof]
             pos = torch.einsum('...ik,...jk->...ij', basis_single_dof, params)
-            pos += self.init_pos[..., None, :] if self.init_pos is not None else 0
+            # pos += self.init_pos[..., None, :] if self.init_pos is not None else 0
 
             self.pos = pos
 
@@ -544,10 +542,10 @@ class UniformBSpline(ProbabilisticMPInterface):
         pos_det = torch.einsum('...ik,...jk->...ij', basis_single_dof, dummy_params)
         # swtich axes to [*add_dim, num_dof, num_times]
         pos_det = torch.einsum('...ij->...ji', pos_det)
-        if self.basis_gn.init_cond_order != 0:
-            init_bias = self.init_pos.unsqueeze(-1).expand(*self.init_pos.shape,
-                                                           pos_det.size(-1))
-            pos_det += init_bias
+        # if self.basis_gn.init_cond_order != 0:
+        #     init_bias = self.init_pos.unsqueeze(-1).expand(*self.init_pos.shape,
+        #                                                    pos_det.size(-1))
+        #     pos_det += init_bias
         pos_det = pos_det.reshape(*self.add_dim, -1)
 
         if self.basis_gn.goal_basis: #and self.basis_gn.end_cond_order==-1:
@@ -598,7 +596,7 @@ class UniformBSpline(ProbabilisticMPInterface):
         return {"params": params,
                 "init_pos": self.init_pos,
                 "init_vel": self.init_vel,
-                "end_pos": self.end_pos + self.init_pos if (self.init_pos is not None and self.end_pos is not None) else self.end_pos,
+                "end_pos": self.end_pos,
                 "end_vel": self.end_vel,
                 }
 
